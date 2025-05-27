@@ -8,6 +8,48 @@ dotenv.config();
 // Start health check server for Railway
 require('./health-check.js');
 
+// Simple rate limiting (in-memory for now)
+const userUsage = new Map(); // userId -> { count, resetTime }
+const HOURLY_LIMIT = 10; // 10 animations per hour per user
+const RESET_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// Helper function to get next reset time (1 hour from now)
+function getNextResetTime() {
+  return Date.now() + RESET_INTERVAL;
+}
+
+// Helper function to check and update user usage
+function checkUserUsage(userId) {
+  const now = Date.now();
+
+  if (!userUsage.has(userId)) {
+    userUsage.set(userId, { count: 0, resetTime: getNextResetTime() });
+  }
+
+  const userData = userUsage.get(userId);
+
+  // Reset count if past reset time
+  if (now >= userData.resetTime) {
+    userData.count = 0;
+    userData.resetTime = getNextResetTime();
+  }
+
+  return userData;
+}
+
+// Helper function to increment user usage
+function incrementUserUsage(userId) {
+  const userData = checkUserUsage(userId);
+  userData.count++;
+  fs.appendFileSync('bot-log.txt', `User ${userId} usage: ${userData.count}/${HOURLY_LIMIT} (resets in ${Math.ceil((userData.resetTime - Date.now()) / (1000 * 60))} minutes)\n`);
+}
+
+// Helper function to check if user is over limit
+function isUserOverLimit(userId) {
+  const userData = checkUserUsage(userId);
+  return userData.count >= HOURLY_LIMIT;
+}
+
 // Clear log file
 fs.writeFileSync('bot-log.txt', 'Starting Logging Bot...\n');
 fs.appendFileSync('bot-log.txt', `Discord Token: ${process.env.DISCORD_TOKEN ? 'Set (length: ' + process.env.DISCORD_TOKEN.length + ')' : 'Not set'}\n`);
@@ -48,6 +90,55 @@ async function handleStickerizeCommand(interaction) {
     // Defer reply to give us time to process
     await interaction.deferReply();
     fs.appendFileSync('bot-log.txt', 'Processing stickerize command...\n');
+
+    // Check rate limiting
+    const userId = interaction.user.id;
+    const userData = checkUserUsage(userId);
+
+    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Usage: ${userData.count}/${HOURLY_LIMIT}\n`);
+
+    // Check if user has exceeded hourly limit
+    if (isUserOverLimit(userId)) {
+      const minutesUntilReset = Math.ceil((userData.resetTime - Date.now()) / (1000 * 60));
+
+      const rateLimitEmbed = {
+        color: 0xffa500,
+        title: '⏱️ Rate Limit Reached',
+        description: `You've used all **${HOURLY_LIMIT}** animations this hour.`,
+        fields: [
+          {
+            name: '🔄 Limit Resets In',
+            value: `${minutesUntilReset} minutes`,
+            inline: true
+          },
+          {
+            name: '💡 Why Rate Limits?',
+            value: 'Rate limits help keep the bot running smoothly for everyone and manage API costs.',
+            inline: false
+          },
+          {
+            name: '🚀 Coming Soon',
+            value: 'Premium subscriptions with higher limits and exclusive features!',
+            inline: false
+          }
+        ],
+        footer: {
+          text: 'Thanks for using Stickerize Bot! 🎨'
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      await interaction.followUp({
+        embeds: [rateLimitEmbed],
+        ephemeral: true
+      });
+
+      fs.appendFileSync('bot-log.txt', `User ${userId} hit rate limit, shown rate limit message\n`);
+      return;
+    }
+
+    // Increment usage
+    incrementUserUsage(userId);
 
     // Get attachment and options
     const attachment = interaction.options.getAttachment('image');
@@ -554,6 +645,11 @@ async function handleStatsCommand(interaction) {
         {
           name: '💡 Features',
           value: '✅ Image to GIF conversion\n✅ Background removal (AI-powered)\n✅ Discord sticker optimization\n✅ Multiple animation styles\n✅ Smart size optimization',
+          inline: false
+        },
+        {
+          name: '⏱️ Rate Limits',
+          value: `**Current Limit:** ${HOURLY_LIMIT} animations per hour\n**Reset Interval:** Every 60 minutes\n**Purpose:** Keep the bot running smoothly for everyone!`,
           inline: false
         }
       ],
