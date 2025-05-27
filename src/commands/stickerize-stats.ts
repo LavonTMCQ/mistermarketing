@@ -36,7 +36,7 @@ export async function execute(interaction: CommandInteraction) {
     return;
   }
 
-  const subcommand = interaction.options.getSubcommand();
+  const subcommand = (interaction.options as any).getSubcommand();
 
   if (subcommand === 'view') {
     await handleViewStats(interaction);
@@ -128,7 +128,7 @@ async function handleSetQuota(interaction: CommandInteraction) {
     return;
   }
 
-  const amount = interaction.options.getInteger('amount');
+  const amount = (interaction.options as any).getInteger('amount');
   if (!amount) {
     await interaction.reply({
       content: 'Please provide a valid quota amount.',

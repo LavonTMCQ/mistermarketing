@@ -4,8 +4,7 @@ import path from 'path';
 import { promisify } from 'util';
 import { ImageJobData } from './queue';
 import { logUsage } from './database';
-import { REST } from '@discordjs/rest';
-import { Routes } from 'discord.js';
+import { REST, Routes } from '@discordjs/rest';
 import { config } from 'dotenv';
 import { validateImage as validateImageUtil, cropToSquare } from '../utils/imageValidator';
 import { videoToAPNG } from '../utils/apngConverter';
@@ -128,7 +127,7 @@ async function uploadToDiscord(filePath: string, interactionId: string, interact
 
   // Send follow-up message with the file
   await rest.post(
-    Routes.interactionFollowup(interactionId, interactionToken),
+    Routes.webhookMessage(interactionId, interactionToken),
     {
       body: {
         content: 'Here is your animated sticker!',
@@ -143,7 +142,7 @@ async function uploadToDiscord(filePath: string, interactionId: string, interact
 // Send error message to user
 async function sendErrorMessage(interactionId: string, interactionToken: string, errorMessage: string): Promise<void> {
   await rest.post(
-    Routes.interactionFollowup(interactionId, interactionToken),
+    Routes.webhookMessage(interactionId, interactionToken),
     {
       body: {
         content: `Error creating sticker: ${errorMessage}`,

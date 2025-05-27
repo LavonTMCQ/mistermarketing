@@ -8,7 +8,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "start": "npm run register-simple && npm run logging-bot",
+    "start": "node src/register-simple-js.js && npm run logging-bot",
     "dev": "ts-node src/index.ts",
     "register": "ts-node src/register-commands.ts",
     "test-local": "ts-node scripts/test-local.ts",

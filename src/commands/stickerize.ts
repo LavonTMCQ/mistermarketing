@@ -6,26 +6,26 @@ import { getGuildStats } from '../services/database';
 export const data = new SlashCommandBuilder()
   .setName('stickerize')
   .setDescription('Convert an image to an animated sticker')
-  .addAttachmentOption(option => 
+  .addAttachmentOption(option =>
     option.setName('image_1')
       .setDescription('The first image to convert')
       .setRequired(true))
-  .addAttachmentOption(option => 
+  .addAttachmentOption(option =>
     option.setName('image_2')
       .setDescription('The second image to convert (optional)')
       .setRequired(false))
-  .addAttachmentOption(option => 
+  .addAttachmentOption(option =>
     option.setName('image_3')
       .setDescription('The third image to convert (optional)')
       .setRequired(false));
 
 export async function execute(interaction: CommandInteraction) {
   await interaction.deferReply();
-  
+
   try {
     // Get guild stats to check quota
     const guildStats = await getGuildStats(interaction.guildId!);
-    
+
     // Check if guild has reached quota
     if (guildStats.usage >= guildStats.quota) {
       await interaction.followUp({
@@ -34,16 +34,16 @@ export async function execute(interaction: CommandInteraction) {
       });
       return;
     }
-    
+
     // Get attachments
     const attachments = [];
     for (let i = 1; i <= 3; i++) {
-      const attachment = interaction.options.getAttachment(`image_${i}`);
+      const attachment = (interaction.options as any).getAttachment(`image_${i}`);
       if (attachment) {
         attachments.push(attachment);
       }
     }
-    
+
     // Validate attachments
     const validAttachments = attachments.filter(attachment => {
       // Check file size (< 8MB)
@@ -54,7 +54,7 @@ export async function execute(interaction: CommandInteraction) {
         });
         return false;
       }
-      
+
       // Check file type
       const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
       if (!validTypes.includes(attachment.contentType!)) {
@@ -64,10 +64,10 @@ export async function execute(interaction: CommandInteraction) {
         });
         return false;
       }
-      
+
       return true;
     });
-    
+
     if (validAttachments.length === 0) {
       await interaction.followUp({
         content: 'No valid attachments found. Please attach at least one valid image.',
@@ -75,13 +75,13 @@ export async function execute(interaction: CommandInteraction) {
       });
       return;
     }
-    
+
     // Process each valid attachment
     await interaction.followUp({
       content: `Processing ${validAttachments.length} image(s). This may take up to 60 seconds...`,
       ephemeral: false
     });
-    
+
     // Add each image to the processing queue
     for (const attachment of validAttachments) {
       await addImageToQueue({

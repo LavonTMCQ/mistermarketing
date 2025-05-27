@@ -36,14 +36,14 @@ export async function setupQueue() {
   const worker = new Worker('image-processing', async (job: Job<ImageJobData>) => {
     try {
       console.log(`Processing job ${job.id}: ${job.data.imageUrl}`);
-      
+
       // Process the image
       const result = await processImage(job.data);
-      
+
       return result;
     } catch (error: any) {
       console.error(`Error processing job ${job.id}:`, error);
-      
+
       // Log error to database
       await logError(
         job.data.guildId,
@@ -51,7 +51,7 @@ export async function setupQueue() {
         error.message || 'Unknown error',
         error.stack
       );
-      
+
       throw error;
     }
   }, { connection: redisConnection });
@@ -61,8 +61,8 @@ export async function setupQueue() {
     console.log(`Job ${job.id} completed successfully`);
   });
 
-  worker.on('failed', (job: Job<ImageJobData>, error) => {
-    console.error(`Job ${job.id} failed:`, error);
+  worker.on('failed', (job: Job<ImageJobData> | undefined, error: Error) => {
+    console.error(`Job ${job?.id || 'unknown'} failed:`, error);
   });
 
   console.log('Image processing worker started');
@@ -71,7 +71,7 @@ export async function setupQueue() {
 // Add job to queue
 export async function addImageToQueue(data: ImageJobData): Promise<string> {
   const job = await imageQueue.add('process-image', data);
-  return job.id;
+  return job.id || 'unknown';
 }
 
 export default imageQueue;
