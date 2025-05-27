@@ -23,7 +23,8 @@
     "login-test": "node src/login-test.js",
     "logging-bot": "node src/logging-bot.js",
     "railway-start": "npm run register-simple && npm run logging-bot",
-    "deployment-check": "node src/deployment-check.js"
+    "deployment-check": "node src/deployment-check.js",
+    "debug-bot": "node src/debug-bot.js"
   },
   "keywords": [],
   "author": "",

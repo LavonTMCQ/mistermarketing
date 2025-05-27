@@ -19,5 +19,5 @@ COPY . .
 # Expose port for health check
 EXPOSE 3000
 
-# Start the bot
-CMD ["sh", "-c", "node src/register-simple-js.js; npm run logging-bot"]
+# Start the debug bot
+CMD ["sh", "-c", "node src/register-simple-js.js; node src/debug-bot.js"]
