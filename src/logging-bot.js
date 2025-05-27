@@ -37,6 +37,8 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.commandName === 'stickerize') {
     await handleStickerizeCommand(interaction);
+  } else if (interaction.commandName === 'stickerstats') {
+    await handleStatsCommand(interaction);
   }
 });
 
@@ -51,9 +53,11 @@ async function handleStickerizeCommand(interaction) {
     const attachment = interaction.options.getAttachment('image');
     const stickerSize = interaction.options.getBoolean('sticker_size') || false;
     const removeBackground = interaction.options.getBoolean('remove_background') || false;
+    const animationStyle = interaction.options.getString('animation_style') || 'smooth';
 
     fs.appendFileSync('bot-log.txt', `Sticker size option: ${stickerSize}\n`);
     fs.appendFileSync('bot-log.txt', `Remove background option: ${removeBackground}\n`);
+    fs.appendFileSync('bot-log.txt', `Animation style: ${animationStyle}\n`);
 
     if (!attachment) {
       await interaction.followUp({
@@ -119,18 +123,25 @@ async function handleStickerizeCommand(interaction) {
     // Process image if background removal is requested
     let processedImagePath = imagePath;
 
-    // For now, we'll disable the background removal feature due to compatibility issues
+    // Process background removal if requested
     if (removeBackground) {
       await interaction.followUp({
-        content: 'Background removal is currently disabled due to technical issues. Proceeding with the original image.',
+        content: 'Removing background... This may take an extra 30 seconds.',
         ephemeral: false
       });
 
-      // Log that background removal was requested but disabled
-      fs.appendFileSync('bot-log.txt', 'Background removal requested but disabled\n');
-
-      // Set removeBackground to false to avoid any issues
-      removeBackground = false;
+      try {
+        fs.appendFileSync('bot-log.txt', 'Starting background removal with Replicate API\n');
+        processedImagePath = await removeImageBackgroundWithAI(imagePath, tempDir);
+        fs.appendFileSync('bot-log.txt', `Background removal completed: ${processedImagePath}\n`);
+      } catch (bgError) {
+        fs.appendFileSync('bot-log.txt', `Background removal failed: ${bgError.message}\n`);
+        await interaction.followUp({
+          content: 'Background removal failed, proceeding with original image.',
+          ephemeral: false
+        });
+        processedImagePath = imagePath;
+      }
     }
 
     // Generate animation using Replicate API
@@ -144,6 +155,35 @@ async function handleStickerizeCommand(interaction) {
     const imageBuffer = fs.readFileSync(processedImagePath);
     const base64Image = imageBuffer.toString('base64');
 
+    // Determine animation parameters based on style
+    let motionBucketId, fps, numFrames;
+
+    switch (animationStyle) {
+      case 'dramatic':
+        motionBucketId = 180; // More motion
+        fps = 10;
+        numFrames = 20;
+        break;
+      case 'subtle':
+        motionBucketId = 80; // Less motion
+        fps = 6;
+        numFrames = 12;
+        break;
+      case 'live2d':
+        motionBucketId = 100; // Moderate motion, good for characters
+        fps = 8;
+        numFrames = 16;
+        break;
+      case 'smooth':
+      default:
+        motionBucketId = 127; // Default balanced motion
+        fps = 8;
+        numFrames = 16;
+        break;
+    }
+
+    fs.appendFileSync('bot-log.txt', `Using animation parameters: motion=${motionBucketId}, fps=${fps}, frames=${numFrames}\n`);
+
     // Call Replicate API
     const replicateResponse = await axios.post(
       'https://api.replicate.com/v1/predictions',
@@ -151,9 +191,9 @@ async function handleStickerizeCommand(interaction) {
         version: 'd68b6e09eedbac7a49e3d8644999d93579c386a083768235cabca88796d70d82',
         input: {
           input_image: `data:image/png;base64,${base64Image}`,
-          motion_bucket_id: 127,
-          fps: 8,
-          num_frames: 16
+          motion_bucket_id: motionBucketId,
+          fps: fps,
+          num_frames: numFrames
         }
       },
       {
@@ -450,109 +490,186 @@ async function handleStickerizeCommand(interaction) {
   }
 }
 
-// Function to remove background from an image
-async function removeImageBackground(imagePath, tempDir) {
-  return new Promise((resolve, reject) => {
+// Handle the stats command
+async function handleStatsCommand(interaction) {
+  try {
+    await interaction.deferReply();
+    fs.appendFileSync('bot-log.txt', 'Processing stickerstats command...\n');
+
+    // Read bot log to get basic stats
+    let totalCommands = 0;
+    let successfulCommands = 0;
+    let failedCommands = 0;
+    let backgroundRemovals = 0;
+    let stickerSizeRequests = 0;
+
     try {
-      // Create output path for the processed image
-      const outputPath = path.join(tempDir, `nobg-${path.basename(imagePath)}`);
+      if (fs.existsSync('bot-log.txt')) {
+        const logContent = fs.readFileSync('bot-log.txt', 'utf8');
+        const lines = logContent.split('\n');
 
-      // Use ffmpeg to remove the background
-      // This is a multi-step approach for better results
-
-      // Step 1: Create a temporary directory for intermediate files
-      const tmpDir = path.join(tempDir, 'bg_removal_tmp');
-      if (!fs.existsSync(tmpDir)) {
-        fs.mkdirSync(tmpDir, { recursive: true });
-      }
-
-    // Step 2: Extract edges to help identify the foreground
-    const edgesPath = path.join(tmpDir, 'edges.png');
-    const edgesCommand = `ffmpeg -i "${imagePath}" -vf "edgedetect=mode=colormix:high=0" -y "${edgesPath}"`;
-
-    fs.appendFileSync('bot-log.txt', `Running edge detection: ${edgesCommand}\n`);
-
-    exec(edgesCommand, (edgeError, edgeStdout, edgeStderr) => {
-      if (edgeError) {
-        fs.appendFileSync('bot-log.txt', `Edge detection error: ${edgeError.message}\n`);
-        // Continue with a simpler approach
-        const simpleCommand = `ffmpeg -i "${imagePath}" -vf "colorkey=0x000000:0.3:0.2,format=rgba" -y "${outputPath}"`;
-
-        exec(simpleCommand, (simpleError, simpleStdout, simpleStderr) => {
-          if (simpleError) {
-            fs.appendFileSync('bot-log.txt', `Simple background removal error: ${simpleError.message}\n`);
-            reject(simpleError);
-            return;
-          }
-
-          if (fs.existsSync(outputPath)) {
-            // Clean up
-            try {
-              fs.rmdirSync(tmpDir, { recursive: true });
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-
-            resolve(outputPath);
-          } else {
-            reject(new Error('Background removal failed to create output file'));
-          }
+        lines.forEach(line => {
+          if (line.includes('Processing stickerize command')) totalCommands++;
+          if (line.includes('Command completed successfully')) successfulCommands++;
+          if (line.includes('Error:')) failedCommands++;
+          if (line.includes('Starting background removal')) backgroundRemovals++;
+          if (line.includes('Using Discord sticker size optimization')) stickerSizeRequests++;
         });
+      }
+    } catch (error) {
+      fs.appendFileSync('bot-log.txt', `Error reading stats: ${error.message}\n`);
+    }
 
-        return;
+    // Get bot uptime
+    const uptimeSeconds = process.uptime();
+    const uptimeHours = Math.floor(uptimeSeconds / 3600);
+    const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
+
+    // Create stats embed
+    const statsEmbed = {
+      color: 0x00ff00,
+      title: '📊 Stickerize Bot Statistics',
+      description: 'Here are the current bot statistics and information',
+      fields: [
+        {
+          name: '🎯 Usage Statistics',
+          value: `**Total Commands:** ${totalCommands}\n**Successful:** ${successfulCommands}\n**Failed:** ${failedCommands}\n**Success Rate:** ${totalCommands > 0 ? Math.round((successfulCommands / totalCommands) * 100) : 0}%`,
+          inline: true
+        },
+        {
+          name: '🎨 Feature Usage',
+          value: `**Background Removals:** ${backgroundRemovals}\n**Sticker Size Requests:** ${stickerSizeRequests}\n**Regular Emojis:** ${successfulCommands - stickerSizeRequests}`,
+          inline: true
+        },
+        {
+          name: '⚡ System Info',
+          value: `**Uptime:** ${uptimeHours}h ${uptimeMinutes}m\n**Node.js:** ${process.version}\n**Memory:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+          inline: true
+        },
+        {
+          name: '🎭 Animation Styles Available',
+          value: '🌊 Smooth Motion (Default)\n🎬 Dramatic Motion\n✨ Subtle Motion\n🎭 Live2D Style',
+          inline: false
+        },
+        {
+          name: '💡 Features',
+          value: '✅ Image to GIF conversion\n✅ Background removal (AI-powered)\n✅ Discord sticker optimization\n✅ Multiple animation styles\n✅ Smart size optimization',
+          inline: false
+        }
+      ],
+      footer: {
+        text: 'Stickerize Bot - Making Discord more animated! 🚀'
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    await interaction.followUp({
+      embeds: [statsEmbed]
+    });
+
+    fs.appendFileSync('bot-log.txt', 'Stats command completed successfully\n');
+
+  } catch (error) {
+    console.error('Error in stats command:', error);
+    fs.appendFileSync('bot-log.txt', `Stats command error: ${error.message}\n`);
+
+    try {
+      await interaction.followUp({
+        content: `An error occurred while fetching statistics: ${error.message}`,
+        ephemeral: true
+      });
+    } catch (followUpError) {
+      console.error('Error sending stats follow-up:', followUpError);
+    }
+  }
+}
+
+// Function to remove background from an image using AI
+async function removeImageBackgroundWithAI(imagePath, tempDir) {
+  try {
+    // Read image file as base64
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+
+    fs.appendFileSync('bot-log.txt', 'Calling Replicate API for background removal\n');
+
+    // Call Replicate API for background removal using RMBG-1.4 model
+    const replicateResponse = await axios.post(
+      'https://api.replicate.com/v1/predictions',
+      {
+        version: "54ce5ce6-8d25-4bb4-b1ca-92e5e5618794", // RMBG-1.4 model
+        input: {
+          image: `data:image/png;base64,${base64Image}`
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const predictionId = replicateResponse.data.id;
+    fs.appendFileSync('bot-log.txt', `Background removal prediction started: ${predictionId}\n`);
+
+    // Poll for completion
+    let prediction;
+    let attempts = 0;
+    const maxAttempts = 20; // 3-4 minutes max
+
+    while (attempts < maxAttempts) {
+      const pollResponse = await axios.get(
+        `https://api.replicate.com/v1/predictions/${predictionId}`,
+        {
+          headers: {
+            'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      prediction = pollResponse.data;
+
+      if (prediction.status === 'succeeded') {
+        break;
+      } else if (prediction.status === 'failed') {
+        const errorMessage = prediction.error || 'Unknown error';
+        fs.appendFileSync('bot-log.txt', `Background removal failed: ${errorMessage}\n`);
+        throw new Error(`Background removal failed: ${errorMessage}`);
       }
 
-      // Step 3: Use a combination of filters to isolate the foreground
-      // This uses a combination of edge detection and color-based segmentation
-      const command = `ffmpeg -i "${imagePath}" -i "${edgesPath}" -filter_complex "[0:v][1:v]blend=all_mode=overlay:all_opacity=0.5,colorkey=0x000000:0.3:0.2,format=rgba" -y "${outputPath}"`;
-
-      fs.appendFileSync('bot-log.txt', `Running advanced background removal: ${command}\n`);
-
-      exec(command, (error, stdout, stderr) => {
-        // Clean up
-        try {
-          fs.rmdirSync(tmpDir, { recursive: true });
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-
-        if (error) {
-          fs.appendFileSync('bot-log.txt', `Advanced background removal error: ${error.message}\n`);
-
-          // Try a simpler approach as fallback
-          const fallbackCommand = `ffmpeg -i "${imagePath}" -vf "colorkey=0x000000:0.3:0.2,format=rgba" -y "${outputPath}"`;
-
-          exec(fallbackCommand, (fallbackError, fallbackStdout, fallbackStderr) => {
-            if (fallbackError) {
-              fs.appendFileSync('bot-log.txt', `Fallback background removal error: ${fallbackError.message}\n`);
-              reject(fallbackError);
-              return;
-            }
-
-            if (fs.existsSync(outputPath)) {
-              resolve(outputPath);
-            } else {
-              reject(new Error('Background removal failed to create output file'));
-            }
-          });
-
-          return;
-        }
-
-        // Check if the output file exists
-        if (fs.existsSync(outputPath)) {
-          resolve(outputPath);
-        } else {
-          reject(new Error('Background removal failed to create output file'));
-        }
-      });
-    });
-    } catch (error) {
-      fs.appendFileSync('bot-log.txt', `Background removal general error: ${error.message}\n`);
-      // Return the original image path if background removal fails
-      resolve(imagePath);
+      // Wait 10 seconds before polling again
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      attempts++;
+      fs.appendFileSync('bot-log.txt', `Background removal polling attempt ${attempts}...\n`);
     }
-  });
+
+    if (!prediction || prediction.status !== 'succeeded') {
+      throw new Error('Background removal timed out or failed');
+    }
+
+    // Download the processed image
+    const processedImageUrl = prediction.output;
+    fs.appendFileSync('bot-log.txt', `Background removed image URL: ${processedImageUrl}\n`);
+
+    const processedResponse = await axios({
+      method: 'GET',
+      url: processedImageUrl,
+      responseType: 'arraybuffer'
+    });
+
+    // Save the processed image
+    const outputPath = path.join(tempDir, `nobg-${path.basename(imagePath)}`);
+    fs.writeFileSync(outputPath, processedResponse.data);
+    fs.appendFileSync('bot-log.txt', `Background removed image saved: ${outputPath}\n`);
+
+    return outputPath;
+
+  } catch (error) {
+    fs.appendFileSync('bot-log.txt', `Background removal error: ${error.message}\n`);
+    throw error;
+  }
 }
 
 // Handle errors

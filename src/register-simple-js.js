@@ -19,9 +19,24 @@ const stickerizeCommand = new SlashCommandBuilder()
   .addBooleanOption(option =>
     option.setName('remove_background')
       .setDescription('Remove the background to create a transparent sticker')
-      .setRequired(false));
+      .setRequired(false))
+  .addStringOption(option =>
+    option.setName('animation_style')
+      .setDescription('Choose the animation style')
+      .setRequired(false)
+      .addChoices(
+        { name: '🌊 Smooth Motion (Default)', value: 'smooth' },
+        { name: '🎬 Dramatic Motion', value: 'dramatic' },
+        { name: '✨ Subtle Motion', value: 'subtle' },
+        { name: '🎭 Live2D Style', value: 'live2d' }
+      ));
 
-const commands = [stickerizeCommand.toJSON()];
+// Create the stats command
+const statsCommand = new SlashCommandBuilder()
+  .setName('stickerstats')
+  .setDescription('View bot usage statistics and information');
+
+const commands = [stickerizeCommand.toJSON(), statsCommand.toJSON()];
 
 // Construct and prepare an instance of the REST module
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
