@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ['nodejs_18', 'npm']
+
+[phases.install]
+cmds = ['npm ci']
+
+[phases.build]
+cmds = ['echo "No build step required - using JavaScript bot"']
+
+[start]
+cmd = 'node src/register-simple-js.js && npm run logging-bot'
