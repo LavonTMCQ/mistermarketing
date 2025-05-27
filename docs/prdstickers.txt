@@ -1,0 +1,170 @@
+**Product Requirements Document (PRD)**
+
+---
+
+### 1 — Product Overview
+
+Build a lightweight Discord bot (“Stickerize‑Bot”) that:
+
+1. Accepts one or more image attachments from a user.
+2. Generates a short animation (≤ 5 s, 1:1 aspect) from each image using an inexpensive, state‑of‑the‑art video diffusion model.
+3. Down‑sizes and converts the output to an animated APNG that obeys Discord’s sticker constraints (320 × 320 px, ≤ 512 KB). ([Discord Support][1])
+4. Returns the finished file, ready for server admins to upload as a custom sticker.
+
+---
+
+### 2 — Goals & Success Metrics
+
+| Goal            | Metric                                                 | Target |
+| --------------- | ------------------------------------------------------ | ------ |
+| Fast turnaround | ≤ 60 s p95 for <1 MB input                             | MVP    |
+| Low cost        | ≤ \$0.25 per run at 16 frames                          | MVP    |
+| High fidelity   | ≥ 90 % of runs accepted by users without re‑try        | Beta   |
+| Reliability     | ≥ 99 % error‑free executions (excluding model outages) | GA     |
+
+---
+
+### 3 — User Stories
+
+* **U1** – *“/stickerize”*: As a Discord user, I send “/stickerize” with an image and get an animated sticker back.
+* **U2** – *Batch*: As a user, I can attach up to 3 images and receive 3 stickers in one call.
+* **U3** – *Format guardrails*: If my file is too large or wrong ratio, the bot explains the limits and offers to auto‑crop.
+* **U4** – *Cost transparency*: Admins can query “/stickerize‑stats” to see monthly usage and spend.
+
+---
+
+### 4 — Functional Requirements
+
+| #  | Requirement                                                                                                            |
+| -- | ---------------------------------------------------------------------------------------------------------------------- |
+| F1 | Slash command `/stickerize` (Guild‑wide) with up to 3 `attachment` options.                                            |
+| F2 | Input validation (file type, <8 MB Discord limit, ratio ≈1:1).                                                         |
+| F3 | Image → MP4/WEBM loop generation (≤ 5 s, 16–24 fps) via selected model (see §6).                                       |
+| F4 | Post‑processing pipeline: `ffmpeg` (scale 320:320, palette reduction) → `apngasm` → size check/re‑quantize.            |
+| F5 | Error handling with retry (max 2) and user‑friendly fallback (“Could not compress under 512 KB, try a simpler image”). |
+| F6 | Admin‑only `/stickerize‑stats reset` & `/stickerize‑quota set` commands.                                               |
+| F7 | Logging (per‑guild usage, GPU minutes, errors) to a Postgres table.                                                    |
+
+---
+
+### 5 — Non‑Functional Requirements
+
+* **Performance:**  ≤ 60 s p95 (see metrics).
+* **Scalability:**  Queue jobs in Redis; horizontal workers using concurrency flag.
+* **Cost efficiency:**  Pay‑as‑you‑go GPU or local 8 GB‑VRAM GPU; average <\$0.25/run.
+* **Observability:**  Structured logs → Grafana + Alertmanager when error rate >5 %/10 min.
+* **Security & Abuse:**  NSFW image filter (Azure Vision or free model) before inference; per‑guild rate limits.
+* **Compliance:**  Sticker output respects Discord’s APNG, 320 × 320 px, ≤ 512 KB, ≤ 60 FPS. ([Discord Support][1])
+
+---
+
+### 6 — Model Selection & Costing
+
+| Option                                                                   | Notes                             | Rough \$/run\*       | Pros / Cons                                       |
+| ------------------------------------------------------------------------ | --------------------------------- | -------------------- | ------------------------------------------------- |
+| **Stable Video Diffusion (SVD)** on Replicate (sunfjun) ([Replicate][2]) | 16 frames, promptless img2vid     | **\$0.22**           | Managed GPU, predictable; still new so artifacts. |
+| **AnimateDiff** open‑source ([GitHub][3])                                | Plug‑in for SD 1.5, local GPU     | **\$0 (infra only)** | Free + controllable; needs VRAM (>8 GB) & tuning. |
+| **Pika Labs API** ([Pika Labs Community][4])                             | Cloud credits (Free tier: 300/mo) | **\$0.02–0.05**      | Higher fidelity; queue delays at peak.            |
+
+\*Assumes 16 frames @512×512. Pick **AnimateDiff** for self‑hosted MVP; add Replicate fallback for spikes.
+
+---
+
+### 7 — System Architecture
+
+```
+Slash Command  ─┐
+                │   (1) validate & enqueue
+Discord Gateway ─┤
+                ▼
+        Redis Job Queue
+                ▼
+       Worker Container (Node 20)
+          ├─ fetch attachment (axios)
+          ├─ NSFW guard
+          ├─ call Inference Service
+          │     • local AnimateDiff (ComfyUI REST)       ──┐
+          │     • or Replicate / Pika API fallback       ──┘
+          ├─ ffmpeg ➔ scale + loop trim
+          ├─ apngasm ➔ quantize ➔ size verify
+          └─ uploadSticker reply (ephemeral)
+                ▲
+          Postgres (usage, cost, errors)
+```
+
+---
+
+### 8 — Tech Stack
+
+* **Bot runtime:** Node.js 20 + TypeScript, discord.js v14.
+* **Inference micro‑service:** Docker w/ Python 3.10, AnimateDiff (ComfyUI‑Evolved) on CUDA 12.
+* **Media tools:** `ffmpeg‑static`, `apngasm`, `pngquant` (fallback).
+* **Data store:** PostgreSQL 15 (Supabase or RDS).
+* **Queue:** BullMQ backed by Redis 7.
+* **Infra:** Low‑end GPU VM (RTX 3060 12 GB) on Vast.ai; autoscaling workers via Docker Compose + Watchtower.
+* **Monitoring:** Prometheus‑node‑exporter, Grafana Cloud.
+
+---
+
+### 9 — API Endpoints & Commands
+
+| Endpoint / Cmd      | Method | Params                | Response                          |
+| ------------------- | ------ | --------------------- | --------------------------------- |
+| `/stickerize`       | slash  | `image_1..image_3`    | sticker APNG(s)                   |
+| `/stickerize-stats` | slash  | none                  | JSON embed (runs, avg time, cost) |
+| `/inference/run`    | POST   | `image_url`, `frames` | `mp4_url`                         |
+| `/healthz`          | GET    | —                     | 200/500                           |
+
+---
+
+### 10 — Milestones & Timeline (6 weeks)
+
+1. **Week 1** – Spike AnimateDiff locally; validate APNG compression pipeline.
+2. **Week 2** – Slash command scaffolding, Redis queue, Postgres schema.
+3. **Week 3** – End‑to‑end happy‑path (single image, single worker).
+4. **Week 4** – Cost/usage logging, NSFW filter, batch support, error states.
+5. **Week 5** – Replicate fallback + autoscaling; load test (100 concurrent).
+6. **Week 6** – Docs, on‑call alerts, beta rollout to staging guild.
+
+---
+
+### 11 — Risks & Mitigations
+
+| Risk                                | Impact  | Mitigation                                                                |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------- |
+| GPU queue saturation → long waits   | High    | Dual‑path inference (local + Replicate) and queue timeout w/ user notice. |
+| APNG > 512 KB                       | Med     | Iterative quantization; if still large, fallback static PNG.              |
+| Discord API changes (sticker specs) | Low‑Med | Check specs weekly; abstract formatter into module.                       |
+| Abuse / spam uploads                | Med     | Per‑user/guild rate limit + image size cap + NSFW guard.                  |
+
+---
+
+### 12 — Open Questions
+
+1. Do we need a GUI panel for non‑technical admins, or are slash commands enough?
+2. Should we cache generated stickers to avoid re‑rendering identical images?
+3. Minimum acceptable frame count (8 vs 16) for quality–size trade‑off?
+4. Will server owners want static PNG fallback when compression fails?
+
+---
+
+**Appendix A — Discord Sticker Specs**
+
+* Animated format **APNG** only
+* Exact canvas **320 × 320 px**
+* Max file size **512 KB**
+* Up to **60 FPS** (Discord support docs) ([Discord Support][1])
+
+**Appendix B — Cost Reference**
+
+* Stable Video Diffusion on Replicate ≈ **\$0.22/run** (16‑frame) ([Replicate][2])
+* AnimateDiff open‑source (GPU only cost) ([GitHub][3])
+
+---
+
+*End of PRD.*
+
+[1]: https://support.discord.com/hc/en-us/articles/4402687377815-Tips-for-Sticker-Creators-FAQ?utm_source=chatgpt.com "Tips for Sticker Creators FAQ - Discord Support"
+[2]: https://replicate.com/sunfjun/stable-video-diffusion/versions/d68b6e09eedbac7a49e3d8644999d93579c386a083768235cabca88796d70d82?utm_source=chatgpt.com "sunfjun/stable-video-diffusion:d68b6e09 - Replicate"
+[3]: https://github.com/guoyww/AnimateDiff?utm_source=chatgpt.com "Official implementation of AnimateDiff. - GitHub"
+[4]: https://pikalabs.net/pika-pricing/?utm_source=chatgpt.com "Pika Pricing - Pika Labs Community"

@@ -1,0 +1,47 @@
+{
+  "name": "stickersdisc",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "npm run register-simple && npm run logging-bot",
+    "dev": "ts-node src/index.ts",
+    "register": "ts-node src/register-commands.ts",
+    "test-local": "ts-node scripts/test-local.ts",
+    "download-test-image": "ts-node scripts/download-test-image.ts",
+    "test-replicate": "ts-node scripts/test-replicate.ts",
+    "test-pipeline": "ts-node scripts/test-full-pipeline.ts",
+    "simple-bot": "ts-node src/simple-bot.ts",
+    "register-simple": "ts-node src/register-simple-command.ts",
+    "minimal-bot": "ts-node src/minimal-bot.ts",
+    "test-env": "ts-node src/test-env.ts",
+    "js-bot": "node src/simple-js-bot.js",
+    "login-test": "node src/login-test.js",
+    "logging-bot": "node src/logging-bot.js",
+    "railway-start": "npm run register-simple && npm run logging-bot",
+    "deployment-check": "node src/deployment-check.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@discordjs/builders": "^1.11.2",
+    "@discordjs/rest": "^2.5.0",
+    "@types/node": "^22.15.18",
+    "@types/pg": "^8.15.2",
+    "axios": "^1.9.0",
+    "bullmq": "^5.52.2",
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0",
+    "ffmpeg-static": "^5.2.0",
+    "ioredis": "^5.6.1",
+    "pg": "^8.16.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
