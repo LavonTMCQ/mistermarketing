@@ -19,5 +19,5 @@ COPY . .
 # Expose port for health check
 EXPOSE 3000
 
-# Start the bot using Node.js startup script
+# Start the Stickerize bot using Node.js startup script
 CMD ["node", "src/railway-start.js"]

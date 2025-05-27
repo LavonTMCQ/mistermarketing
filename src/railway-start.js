@@ -16,7 +16,7 @@ console.log('- PORT:', process.env.PORT || 'NOT SET');
 async function registerCommands() {
   return new Promise((resolve, reject) => {
     console.log('\n📝 Step 1: Registering Discord commands...');
-    
+
     const registerProcess = spawn('node', ['src/register-simple-js.js'], {
       stdio: 'inherit',
       cwd: process.cwd()
@@ -41,9 +41,9 @@ async function registerCommands() {
 
 async function startBot() {
   return new Promise((resolve, reject) => {
-    console.log('\n🤖 Step 2: Starting debug bot...');
-    
-    const botProcess = spawn('node', ['src/debug-bot.js'], {
+    console.log('\n🤖 Step 2: Starting Stickerize bot...');
+
+    const botProcess = spawn('node', ['src/logging-bot.js'], {
       stdio: 'inherit',
       cwd: process.cwd()
     });
@@ -70,17 +70,17 @@ async function main() {
   try {
     // Step 1: Register commands
     await registerCommands();
-    
+
     // Step 2: Start bot
     await startBot();
-    
+
     console.log('\n🎉 Startup sequence completed!');
-    
+
     // Keep the process alive
     setInterval(() => {
       console.log(`💓 Startup script heartbeat - ${new Date().toISOString()}`);
     }, 300000); // Every 5 minutes
-    
+
   } catch (error) {
     console.error('\n❌ Startup failed:', error);
     process.exit(1);
