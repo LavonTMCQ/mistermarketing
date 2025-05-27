@@ -20,4 +20,4 @@ COPY . .
 EXPOSE 3000
 
 # Start the bot
-CMD ["sh", "-c", "node src/register-simple-js.js && npm run logging-bot"]
+CMD ["sh", "-c", "node src/register-simple-js.js; npm run logging-bot"]
