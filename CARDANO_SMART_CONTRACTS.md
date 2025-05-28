@@ -2,26 +2,39 @@
 
 ## 📚 **Learning Resources & Documentation**
 
-### **Official Cardano Resources**
+### **🔥 AIKEN - Our Chosen Platform (2024 Recommended)**
+- [ ] **Official Website**: https://aiken-lang.org/
+- [ ] **Documentation**: https://aiken-lang.org/installation-instructions
+- [ ] **Standard Library**: https://aiken-lang.github.io/stdlib/
+- [ ] **Playground**: https://play.aiken-lang.org
+- [ ] **Discord Community**: https://discord.gg/ub6atE94v4
+- [ ] **GitHub**: https://github.com/aiken-lang/aiken
+
+### **Why Aiken is PERFECT for Us:**
+```
+✅ MODERN & EASY TO LEARN
+- Rust-inspired syntax (familiar to many developers)
+- Friendly error messages and excellent developer experience
+- Zero configuration - works out of the box
+- Strong static typing with inference
+
+✅ PRODUCTION READY
+- Used by major projects: MinSwap, jpg.store, Sundae Labs
+- 200+ contributors from Cardano community
+- Backed by Cardano Foundation and TxPipe
+- Plutus V3 support (latest virtual machine)
+
+✅ PERFECT FOR DISCORD BOTS
+- Small, focused language for smart contracts
+- Easy integration with off-chain applications
+- Modern tooling (LSP, auto-formatting, testing)
+- Great for payment processing contracts
+```
+
+### **Alternative: Plutus (Traditional)**
 - [ ] **Cardano Developer Portal**: https://developers.cardano.org/
 - [ ] **Plutus Documentation**: https://plutus.readthedocs.io/
-- [ ] **Aiken Documentation**: https://aiken-lang.org/
-- [ ] **Cardano Improvement Proposals (CIPs)**: https://cips.cardano.org/
-
-### **Programming Languages**
-```
-🔥 AIKEN (Recommended - Modern & Easy)
-- Rust-inspired syntax
-- Better developer experience
-- Active development
-- Growing ecosystem
-
-📚 PLUTUS (Traditional - Haskell-based)
-- Functional programming
-- More established
-- Steeper learning curve
-- Extensive documentation
-```
+- **Note**: More complex, Haskell-based, steeper learning curve
 
 ### **Development Tools**
 - [ ] **Aiken CLI** - Smart contract development

@@ -145,10 +145,55 @@ async function handleStickerizeCommand(interaction) {
     const stickerSize = interaction.options.getBoolean('sticker_size') || false;
     const removeBackground = interaction.options.getBoolean('remove_background') || false;
     const animationStyle = interaction.options.getString('animation_style') || 'smooth';
+    const quality = interaction.options.getString('quality') || 'standard';
 
     fs.appendFileSync('bot-log.txt', `Sticker size option: ${stickerSize}\n`);
     fs.appendFileSync('bot-log.txt', `Remove background option: ${removeBackground}\n`);
     fs.appendFileSync('bot-log.txt', `Animation style: ${animationStyle}\n`);
+    fs.appendFileSync('bot-log.txt', `Quality option: ${quality}\n`);
+
+    // Check if user requested premium quality
+    if (quality === 'premium' || quality === 'ultra') {
+      const premiumEmbed = {
+        color: 0x9b59b6,
+        title: '💎 Premium Quality Coming Soon!',
+        description: 'You\'ve selected premium quality animation. We\'re building something revolutionary!',
+        fields: [
+          {
+            name: '🪙 Cardano Smart Contract Payments',
+            value: 'Pay with ADA cryptocurrency for premium features!\n• Instant payments\n• Decentralized\n• Lower fees than traditional payments',
+            inline: false
+          },
+          {
+            name: '🔥 Premium Features (Coming Soon)',
+            value: '💎 **Premium Quality**: MiniMax Video-01-Live model\n🔥 **Ultra Quality**: Latest AI models\n⚡ **Priority Processing**: Skip the queue\n🎨 **Advanced Styles**: Exclusive animation effects',
+            inline: false
+          },
+          {
+            name: '📅 Launch Timeline',
+            value: '**Phase 1**: Smart contract development (2-4 weeks)\n**Phase 2**: ADA payment integration (1-2 weeks)\n**Phase 3**: Premium model deployment (1 week)',
+            inline: false
+          },
+          {
+            name: '🚀 Be a Beta Tester!',
+            value: 'Want early access? Join our Discord community and help test the Cardano integration!',
+            inline: false
+          }
+        ],
+        footer: {
+          text: 'Stickerize Bot - Revolutionizing Discord payments with Cardano! 🪙'
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      await interaction.followUp({
+        embeds: [premiumEmbed],
+        ephemeral: true
+      });
+
+      // For now, continue with standard quality
+      fs.appendFileSync('bot-log.txt', `User ${userId} requested ${quality} quality, shown coming soon message, proceeding with standard\n`);
+    }
 
     if (!attachment) {
       await interaction.followUp({

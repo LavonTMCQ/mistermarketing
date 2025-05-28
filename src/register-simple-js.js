@@ -29,6 +29,15 @@ const stickerizeCommand = new SlashCommandBuilder()
         { name: '🎬 Dramatic Motion', value: 'dramatic' },
         { name: '✨ Subtle Motion', value: 'subtle' },
         { name: '🎭 Live2D Style', value: 'live2d' }
+      ))
+  .addStringOption(option =>
+    option.setName('quality')
+      .setDescription('Choose animation quality (Premium requires ADA payment)')
+      .setRequired(false)
+      .addChoices(
+        { name: '🆓 Standard Quality (Free)', value: 'standard' },
+        { name: '💎 Premium Quality (Coming Soon)', value: 'premium' },
+        { name: '🔥 Ultra Quality (Coming Soon)', value: 'ultra' }
       ));
 
 // Create the stats command
