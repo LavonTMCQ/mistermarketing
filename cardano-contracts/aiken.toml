@@ -1,0 +1,18 @@
+# Aiken project configuration for Discord Bot Payment System
+name = "discord-payment-contracts"
+version = "1.0.0"
+license = "Apache-2.0"
+description = "Smart contracts for Discord bot ADA payment processing"
+
+[repository]
+user = "stickerize-bot"
+project = "payment-contracts"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "2.0.0"
+source = "github"
+
+[config]
+default_plutus_version = "v3"
