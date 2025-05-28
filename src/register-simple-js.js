@@ -84,13 +84,15 @@ async function registerGuildCommands(guildId) {
 
 // Main function
 async function main() {
-  // If guild ID is provided, register for that guild
+  // Register both guild and global commands to ensure they appear
   if (process.env.DISCORD_GUILD_ID && process.env.DISCORD_GUILD_ID !== 'your_discord_guild_id') {
+    console.log('Registering guild commands...');
     await registerGuildCommands(process.env.DISCORD_GUILD_ID);
-  } else {
-    // Otherwise, register globally
-    await registerGlobalCommands();
   }
+
+  // Also register globally for backup
+  console.log('Registering global commands...');
+  await registerGlobalCommands();
 }
 
 // Run the main function
