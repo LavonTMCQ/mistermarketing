@@ -200,10 +200,15 @@ class PaymentVerifier {
     }
   }
 
-  // Get payment address for user
+  // Get payment address for user (YOUR wallet address where you receive funds)
   getPaymentAddress(discordUserId, tier, duration) {
-    // Return the live testnet contract address
-    return this.contractAddress || 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn';
+    // TODO: Replace with your actual Cardano wallet address
+    // For testnet: Use your testnet wallet address
+    // For mainnet: Use your mainnet wallet address
+    const YOUR_WALLET_ADDRESS = process.env.PAYMENT_WALLET_ADDRESS || 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn';
+
+    console.log(`💰 Payment address for ${discordUserId}: ${YOUR_WALLET_ADDRESS}`);
+    return YOUR_WALLET_ADDRESS;
   }
 }
 

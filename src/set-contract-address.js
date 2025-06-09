@@ -5,10 +5,10 @@ const { paymentVerifier } = require('./commands/payment-commands');
 const fs = require('fs');
 const path = require('path');
 
-// Contract addresses (updated after deployment)
-const CONTRACT_ADDRESSES = {
-  testnet: 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn', // ✅ LIVE TESTNET ADDRESS
-  mainnet: 'addr1_placeholder'       // Will be updated after mainnet deployment
+// Payment addresses (YOUR WALLET ADDRESSES for receiving payments)
+const PAYMENT_ADDRESSES = {
+  testnet: 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn', // Smart contract for testing
+  mainnet: 'YOUR_MAINNET_WALLET_ADDRESS_HERE'  // 🚀 YOUR PERSONAL WALLET - YOU GET THE ADA!
 };
 
 // Set the contract address based on environment

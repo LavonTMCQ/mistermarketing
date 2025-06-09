@@ -9,12 +9,12 @@ const CARDANO_APIS = {
   koios: 'https://testnet.koios.rest/api/v1'
 };
 
-// Contract address for verification
-const CONTRACT_ADDRESS = 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn';
+// Payment address where YOU receive the funds
+const PAYMENT_ADDRESS = process.env.PAYMENT_WALLET_ADDRESS || 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn';
 
 class CardanoVerifier {
   constructor() {
-    this.contractAddress = CONTRACT_ADDRESS;
+    this.paymentAddress = PAYMENT_ADDRESS;
     // Note: In production, you'd want to use Blockfrost API key
     // For now, we'll use the free Koios API
   }
@@ -24,7 +24,7 @@ class CardanoVerifier {
     try {
       console.log(`🔍 Verifying transaction: ${txHash}`);
       console.log(`💰 Expected amount: ${expectedAmount} ADA`);
-      console.log(`🏠 Contract address: ${this.contractAddress}`);
+      console.log(`🏠 Payment address: ${this.paymentAddress}`);
 
       // Try to get transaction details from Koios API
       const txResponse = await axios.get(
@@ -47,18 +47,18 @@ class CardanoVerifier {
       const txData = txResponse.data[0];
       console.log(`📊 Transaction found: ${txData.tx_hash}`);
 
-      // Check transaction outputs for payments to our contract address
-      let totalSentToContract = 0;
+      // Check transaction outputs for payments to YOUR wallet address
+      let totalSentToWallet = 0;
       let foundPayment = false;
 
       if (txData.outputs) {
         for (const output of txData.outputs) {
-          if (output.address === this.contractAddress) {
+          if (output.address === this.paymentAddress) {
             // Convert lovelace to ADA (1 ADA = 1,000,000 lovelace)
             const adaAmount = parseInt(output.value) / 1000000;
-            totalSentToContract += adaAmount;
+            totalSentToWallet += adaAmount;
             foundPayment = true;
-            console.log(`💰 Found payment: ${adaAmount} ADA to contract`);
+            console.log(`💰 Found payment: ${adaAmount} ADA to your wallet`);
           }
         }
       }
@@ -66,34 +66,34 @@ class CardanoVerifier {
       if (!foundPayment) {
         return {
           verified: false,
-          error: 'No payment found to contract address'
+          error: 'No payment found to your wallet address'
         };
       }
 
       // Check if the amount is sufficient (allow 1% tolerance)
       const tolerance = expectedAmount * 0.01;
-      const isAmountSufficient = totalSentToContract >= (expectedAmount - tolerance);
+      const isAmountSufficient = totalSentToWallet >= (expectedAmount - tolerance);
 
       if (!isAmountSufficient) {
         return {
           verified: false,
-          error: `Insufficient payment: ${totalSentToContract} ADA (expected: ${expectedAmount} ADA)`
+          error: `Insufficient payment: ${totalSentToWallet} ADA (expected: ${expectedAmount} ADA)`
         };
       }
 
       // Transaction verified successfully
       return {
         verified: true,
-        amount: totalSentToContract,
+        amount: totalSentToWallet,
         txHash: txHash,
         blockHeight: txData.block_height || 0,
         timestamp: txData.tx_timestamp || Date.now(),
-        contractAddress: this.contractAddress
+        paymentAddress: this.paymentAddress
       };
 
     } catch (error) {
       console.error('Cardano verification error:', error.message);
-      
+
       // If API is down, fall back to mock verification for development
       if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
         console.log('⚠️ Cardano API unavailable, using mock verification for development');
@@ -110,7 +110,7 @@ class CardanoVerifier {
   // Mock verification for development when APIs are unavailable
   mockVerification(txHash, expectedAmount, discordUserId) {
     console.log('🧪 Using mock verification (development mode)');
-    
+
     // Simple validation: transaction hash should be at least 64 characters (typical Cardano tx hash)
     if (!txHash || txHash.length < 64) {
       return {
@@ -126,16 +126,16 @@ class CardanoVerifier {
       txHash: txHash,
       blockHeight: Math.floor(Math.random() * 1000000) + 8000000, // Mock block height
       timestamp: Date.now(),
-      contractAddress: this.contractAddress,
+      paymentAddress: this.paymentAddress,
       note: 'Mock verification - replace with real blockchain verification in production'
     };
   }
 
-  // Get contract balance (for monitoring)
-  async getContractBalance() {
+  // Get wallet balance (for monitoring your earnings)
+  async getWalletBalance() {
     try {
       const response = await axios.get(
-        `${CARDANO_APIS.koios}/address_info?_addresses=${this.contractAddress}`,
+        `${CARDANO_APIS.koios}/address_info?_addresses=${this.paymentAddress}`,
         {
           headers: {
             'Accept': 'application/json'
@@ -148,12 +148,12 @@ class CardanoVerifier {
         const addressData = response.data[0];
         const balanceLovelace = parseInt(addressData.balance || 0);
         const balanceAda = balanceLovelace / 1000000;
-        
+
         return {
           success: true,
           balance: balanceAda,
           balanceLovelace: balanceLovelace,
-          address: this.contractAddress
+          address: this.paymentAddress
         };
       }
 
@@ -175,12 +175,12 @@ class CardanoVerifier {
   isValidCardanoAddress(address) {
     // Basic validation for Cardano addresses
     if (!address) return false;
-    
+
     // Testnet addresses start with 'addr_test1'
     // Mainnet addresses start with 'addr1'
     const testnetPattern = /^addr_test1[a-z0-9]{50,}$/;
     const mainnetPattern = /^addr1[a-z0-9]{50,}$/;
-    
+
     return testnetPattern.test(address) || mainnetPattern.test(address);
   }
 
@@ -226,5 +226,5 @@ class CardanoVerifier {
 // Export the verifier
 module.exports = {
   CardanoVerifier,
-  CONTRACT_ADDRESS
+  PAYMENT_ADDRESS
 };
