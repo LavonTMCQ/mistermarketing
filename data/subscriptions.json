@@ -1,0 +1,12 @@
+{
+  "123456789": {
+    "tier": "Premium",
+    "startTime": 1749509760885,
+    "endTime": 1752101760885,
+    "amountPaid": 15,
+    "durationMonths": 1,
+    "isActive": true,
+    "txHash": "test_tx_hash_123",
+    "createdAt": "2025-06-09T22:56:00.885Z"
+  }
+}

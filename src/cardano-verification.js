@@ -3,14 +3,14 @@
 
 const axios = require('axios');
 
-// Cardano testnet API endpoints
+// Cardano mainnet API endpoints
 const CARDANO_APIS = {
-  blockfrost: 'https://cardano-testnet.blockfrost.io/api/v0',
-  koios: 'https://testnet.koios.rest/api/v1'
+  blockfrost: 'https://cardano-mainnet.blockfrost.io/api/v0',
+  koios: 'https://api.koios.rest/api/v1'
 };
 
 // Payment address where YOU receive the funds
-const PAYMENT_ADDRESS = process.env.PAYMENT_WALLET_ADDRESS || 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn';
+const PAYMENT_ADDRESS = process.env.PAYMENT_WALLET_ADDRESS || 'addr1q82j3cnhky8u0w4wa0ntsgeypraf24jxz5qr6wgwcy97u7t8pvpwk4ker5z2lmfsjlvx0y2tex68ahdwql9xkm9urxks9n2nl8';
 
 class CardanoVerifier {
   constructor() {
