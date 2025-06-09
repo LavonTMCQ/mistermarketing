@@ -728,19 +728,23 @@ async function handleStatsCommand(interaction) {
 // Function to remove background from an image using AI
 async function removeImageBackgroundWithAI(imagePath, tempDir) {
   try {
-    // Read image file as base64
-    const imageBuffer = fs.readFileSync(imagePath);
-    const base64Image = imageBuffer.toString('base64');
-
     fs.appendFileSync('bot-log.txt', 'Calling Replicate API for background removal\n');
 
-    // Call Replicate API for background removal using RMBG-1.4 model
+    // Read image file and convert to base64 data URI
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    const mimeType = imagePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const dataUri = `data:${mimeType};base64,${base64Image}`;
+
+    fs.appendFileSync('bot-log.txt', `Image size: ${imageBuffer.length} bytes\n`);
+
+    // Call Replicate API for background removal using 851-labs background-remover model
     const replicateResponse = await axios.post(
       'https://api.replicate.com/v1/predictions',
       {
-        version: "54ce5ce6-8d25-4bb4-b1ca-92e5e5618794", // RMBG-1.4 model
+        version: "a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc", // 851-labs background-remover
         input: {
-          image: `data:image/png;base64,${base64Image}`
+          image: dataUri
         }
       },
       {
