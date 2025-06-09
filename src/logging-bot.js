@@ -8,10 +8,20 @@ dotenv.config();
 // Start health check server for Railway
 require('./health-check.js');
 
-// Simple rate limiting (in-memory for now)
+// Import payment system
+const { subscriptionManager, paymentVerifier } = require('./commands/payment-commands');
+
+// Tier-based rate limiting
 const userUsage = new Map(); // userId -> { count, resetTime }
-const HOURLY_LIMIT = 10; // 10 animations per hour per user
 const RESET_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// Rate limits by tier
+const TIER_LIMITS = {
+  'Standard': 10,    // Free tier: 10 animations per hour
+  'Premium': 50,     // Premium tier: 50 animations per hour
+  'Ultra': 999999,   // Ultra tier: Unlimited
+  'Server': 999999   // Server tier: Unlimited
+};
 
 // Helper function to get next reset time (1 hour from now)
 function getNextResetTime() {
@@ -37,17 +47,26 @@ function checkUserUsage(userId) {
   return userData;
 }
 
+// Helper function to get user's rate limit based on tier
+function getUserRateLimit(userId) {
+  const userTier = subscriptionManager.getUserTier(userId);
+  return TIER_LIMITS[userTier] || TIER_LIMITS['Standard'];
+}
+
 // Helper function to increment user usage
 function incrementUserUsage(userId) {
   const userData = checkUserUsage(userId);
+  const userLimit = getUserRateLimit(userId);
+  const userTier = subscriptionManager.getUserTier(userId);
   userData.count++;
-  fs.appendFileSync('bot-log.txt', `User ${userId} usage: ${userData.count}/${HOURLY_LIMIT} (resets in ${Math.ceil((userData.resetTime - Date.now()) / (1000 * 60))} minutes)\n`);
+  fs.appendFileSync('bot-log.txt', `User ${userId} (${userTier}) usage: ${userData.count}/${userLimit} (resets in ${Math.ceil((userData.resetTime - Date.now()) / (1000 * 60))} minutes)\n`);
 }
 
 // Helper function to check if user is over limit
 function isUserOverLimit(userId) {
   const userData = checkUserUsage(userId);
-  return userData.count >= HOURLY_LIMIT;
+  const userLimit = getUserRateLimit(userId);
+  return userData.count >= userLimit;
 }
 
 // Clear log file
@@ -81,6 +100,15 @@ client.on('interactionCreate', async interaction => {
     await handleStickerizeCommand(interaction);
   } else if (interaction.commandName === 'stickerstats') {
     await handleStatsCommand(interaction);
+  } else if (interaction.commandName === 'subscribe') {
+    const { subscribeCommand } = require('./commands/payment-commands');
+    await subscribeCommand.execute(interaction);
+  } else if (interaction.commandName === 'verify-payment') {
+    const { verifyPaymentCommand } = require('./commands/payment-commands');
+    await verifyPaymentCommand.execute(interaction);
+  } else if (interaction.commandName === 'subscription') {
+    const { statusCommand } = require('./commands/payment-commands');
+    await statusCommand.execute(interaction);
   }
 });
 
@@ -94,8 +122,10 @@ async function handleStickerizeCommand(interaction) {
     // Check rate limiting
     const userId = interaction.user.id;
     const userData = checkUserUsage(userId);
+    const userTier = subscriptionManager.getUserTier(userId);
+    const userLimit = getUserRateLimit(userId);
 
-    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Usage: ${userData.count}/${HOURLY_LIMIT}\n`);
+    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Tier: ${userTier}, Usage: ${userData.count}/${userLimit}\n`);
 
     // Check if user has exceeded hourly limit
     if (isUserOverLimit(userId)) {
@@ -104,21 +134,23 @@ async function handleStickerizeCommand(interaction) {
       const rateLimitEmbed = {
         color: 0xffa500,
         title: '⏱️ Rate Limit Reached',
-        description: `You've used all **${HOURLY_LIMIT}** animations this hour.`,
+        description: `You've used all **${userLimit}** animations this hour on your **${userTier}** tier.`,
         fields: [
+          {
+            name: '🎯 Current Tier',
+            value: userTier,
+            inline: true
+          },
           {
             name: '🔄 Limit Resets In',
             value: `${minutesUntilReset} minutes`,
             inline: true
           },
           {
-            name: '💡 Why Rate Limits?',
-            value: 'Rate limits help keep the bot running smoothly for everyone and manage API costs.',
-            inline: false
-          },
-          {
-            name: '🚀 Coming Soon',
-            value: 'Premium subscriptions with higher limits and exclusive features!',
+            name: '🚀 Upgrade Your Tier',
+            value: userTier === 'Standard' ?
+              '**Premium**: 50 animations/hour for 15 ADA/month\n**Ultra**: Unlimited for 25 ADA/month\n\nUse `/subscribe` to upgrade!' :
+              'You\'re already on a premium tier! 🎉',
             inline: false
           }
         ],
@@ -133,7 +165,7 @@ async function handleStickerizeCommand(interaction) {
         ephemeral: true
       });
 
-      fs.appendFileSync('bot-log.txt', `User ${userId} hit rate limit, shown rate limit message\n`);
+      fs.appendFileSync('bot-log.txt', `User ${userId} hit rate limit (${userTier} tier), shown rate limit message\n`);
       return;
     }
 

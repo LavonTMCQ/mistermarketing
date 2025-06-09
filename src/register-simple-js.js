@@ -45,7 +45,60 @@ const statsCommand = new SlashCommandBuilder()
   .setName('stickerstats')
   .setDescription('View bot usage statistics and information');
 
-const commands = [stickerizeCommand.toJSON(), statsCommand.toJSON()];
+// Create payment commands
+const subscribeCommand = new SlashCommandBuilder()
+  .setName('subscribe')
+  .setDescription('Subscribe to premium features with ADA payments')
+  .addStringOption(option =>
+    option.setName('tier')
+      .setDescription('Subscription tier')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Premium - 15 ADA/month', value: 'Premium' },
+        { name: 'Ultra - 25 ADA/month', value: 'Ultra' },
+        { name: 'Server - 100 ADA/month', value: 'Server' }
+      ))
+  .addIntegerOption(option =>
+    option.setName('duration')
+      .setDescription('Duration in months')
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(12));
+
+const verifyPaymentCommand = new SlashCommandBuilder()
+  .setName('verify-payment')
+  .setDescription('Verify your ADA payment and activate subscription')
+  .addStringOption(option =>
+    option.setName('transaction_hash')
+      .setDescription('Your Cardano transaction hash')
+      .setRequired(true))
+  .addStringOption(option =>
+    option.setName('tier')
+      .setDescription('Subscription tier you paid for')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Premium', value: 'Premium' },
+        { name: 'Ultra', value: 'Ultra' },
+        { name: 'Server', value: 'Server' }
+      ))
+  .addIntegerOption(option =>
+    option.setName('duration')
+      .setDescription('Duration in months you paid for')
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(12));
+
+const subscriptionStatusCommand = new SlashCommandBuilder()
+  .setName('subscription')
+  .setDescription('Check your subscription status');
+
+const commands = [
+  stickerizeCommand.toJSON(),
+  statsCommand.toJSON(),
+  subscribeCommand.toJSON(),
+  verifyPaymentCommand.toJSON(),
+  subscriptionStatusCommand.toJSON()
+];
 
 // Construct and prepare an instance of the REST module
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
