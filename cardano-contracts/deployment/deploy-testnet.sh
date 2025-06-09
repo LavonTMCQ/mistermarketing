@@ -5,22 +5,33 @@
 echo "🧪 Deploying Discord Payment Contract to Testnet..."
 
 # Check if cardano-cli is installed
-if ! command -v cardano-cli &> /dev/null; then
+CARDANO_CLI="$HOME/.local/cardano-cli"
+if ! command -v cardano-cli &> /dev/null && [ ! -f "$CARDANO_CLI" ]; then
     echo "❌ cardano-cli is not installed!"
     echo "Please install Cardano CLI first"
     exit 1
 fi
 
+# Use local cardano-cli if available
+if [ -f "$CARDANO_CLI" ]; then
+    CARDANO_CLI_CMD="$CARDANO_CLI"
+else
+    CARDANO_CLI_CMD="cardano-cli"
+fi
+
+echo "✅ Using Cardano CLI: $CARDANO_CLI_CMD"
+
 # Set testnet parameters
 NETWORK="--testnet-magic 1"
-SCRIPT_FILE="plutus.json"
+SCRIPT_FILE="payment-script.json"
+PLUTUS_FILE="plutus.json"
 
-# Extract contract hash
-CONTRACT_HASH=$(cat $SCRIPT_FILE | jq -r '.validators[0].hash')
+# Extract contract hash from plutus.json
+CONTRACT_HASH=$(cat $PLUTUS_FILE | jq -r '.validators[0].hash')
 echo "📋 Contract Hash: $CONTRACT_HASH"
 
 # Generate script address
-cardano-cli address build \
+$CARDANO_CLI_CMD address build \
     --payment-script-file $SCRIPT_FILE \
     $NETWORK \
     --out-file contract-address.addr

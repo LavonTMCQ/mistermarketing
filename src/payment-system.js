@@ -50,7 +50,7 @@ class SubscriptionManager {
   hasActiveSubscription(discordUserId) {
     const subscription = this.getUserSubscription(discordUserId);
     if (!subscription) return false;
-    
+
     const now = Date.now();
     return subscription.isActive && subscription.endTime > now;
   }
@@ -133,7 +133,7 @@ class SubscriptionManager {
   // Get subscription statistics
   getStats() {
     const subscriptions = Object.values(this.subscriptions);
-    const activeSubscriptions = subscriptions.filter(sub => 
+    const activeSubscriptions = subscriptions.filter(sub =>
       sub.isActive && sub.endTime > Date.now()
     );
 
@@ -171,27 +171,26 @@ class PaymentVerifier {
     console.log(`💰 Contract address set: ${address}`);
   }
 
-  // Verify payment transaction (simplified for now)
+  // Verify payment transaction using real Cardano blockchain
   async verifyPayment(txHash, expectedAmount, discordUserId) {
     try {
-      // TODO: Implement actual Cardano transaction verification
-      // For now, we'll simulate verification
-      console.log(`🔍 Verifying payment: ${txHash}`);
+      console.log(`🔍 Verifying payment on Cardano blockchain: ${txHash}`);
       console.log(`💰 Expected amount: ${expectedAmount} ADA`);
       console.log(`👤 User: ${discordUserId}`);
 
-      // Simulate verification delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Use real Cardano verification
+      const { CardanoVerifier } = require('./cardano-verification');
+      const verifier = new CardanoVerifier();
 
-      // For development, always return success
-      // In production, this would check the actual blockchain
-      return {
-        verified: true,
-        amount: expectedAmount,
-        txHash: txHash,
-        blockHeight: Math.floor(Math.random() * 1000000),
-        timestamp: Date.now()
-      };
+      const result = await verifier.verifyTransaction(txHash, expectedAmount, discordUserId);
+
+      if (result.verified) {
+        console.log(`✅ Payment verified: ${result.amount} ADA`);
+      } else {
+        console.log(`❌ Payment verification failed: ${result.error}`);
+      }
+
+      return result;
     } catch (error) {
       console.error('Payment verification error:', error);
       return {
@@ -203,9 +202,8 @@ class PaymentVerifier {
 
   // Get payment address for user
   getPaymentAddress(discordUserId, tier, duration) {
-    // TODO: Generate unique payment address or use contract address
-    // For now, return the contract address
-    return this.contractAddress || 'addr_test1_placeholder';
+    // Return the live testnet contract address
+    return this.contractAddress || 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn';
   }
 }
 

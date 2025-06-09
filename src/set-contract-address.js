@@ -5,16 +5,16 @@ const { paymentVerifier } = require('./commands/payment-commands');
 const fs = require('fs');
 const path = require('path');
 
-// Contract addresses (will be updated after deployment)
+// Contract addresses (updated after deployment)
 const CONTRACT_ADDRESSES = {
-  testnet: 'addr_test1_placeholder', // Will be updated after testnet deployment
+  testnet: 'addr_test1wr09nkn3uxav3h9l8740lmmq9l2kl05pluv9pu9jwcn285qsxmwsn', // ✅ LIVE TESTNET ADDRESS
   mainnet: 'addr1_placeholder'       // Will be updated after mainnet deployment
 };
 
 // Set the contract address based on environment
 function setContractAddress(network = 'testnet') {
   const address = CONTRACT_ADDRESSES[network];
-  
+
   if (!address || address.includes('placeholder')) {
     console.log(`❌ Contract address not set for ${network}`);
     console.log('Please update CONTRACT_ADDRESSES in this file after deployment');
@@ -23,11 +23,11 @@ function setContractAddress(network = 'testnet') {
 
   // Set the address in the payment verifier
   paymentVerifier.setContractAddress(address);
-  
+
   // Save to environment file for persistence
   const envPath = path.join(__dirname, '..', '.env');
   let envContent = '';
-  
+
   try {
     if (fs.existsSync(envPath)) {
       envContent = fs.readFileSync(envPath, 'utf8');
@@ -39,11 +39,11 @@ function setContractAddress(network = 'testnet') {
   // Update or add contract address
   const addressKey = `CONTRACT_ADDRESS_${network.toUpperCase()}`;
   const addressLine = `${addressKey}=${address}`;
-  
+
   if (envContent.includes(addressKey)) {
     // Replace existing line
     envContent = envContent.replace(
-      new RegExp(`${addressKey}=.*`), 
+      new RegExp(`${addressKey}=.*`),
       addressLine
     );
   } else {
@@ -52,19 +52,19 @@ function setContractAddress(network = 'testnet') {
   }
 
   fs.writeFileSync(envPath, envContent);
-  
+
   console.log(`✅ Contract address set for ${network}: ${address}`);
   console.log(`📄 Updated .env file with ${addressKey}`);
-  
+
   return true;
 }
 
 // Main function
 function main() {
   const network = process.argv[2] || 'testnet';
-  
+
   console.log(`🚀 Setting contract address for ${network}...`);
-  
+
   if (setContractAddress(network)) {
     console.log('✅ Contract address configuration complete!');
     console.log('🔄 Restart the bot to use the new contract address.');
