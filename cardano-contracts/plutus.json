@@ -1,0 +1,99 @@
+{
+  "preamble": {
+    "title": "stickerize-bot/discord-payment-contracts",
+    "description": "Smart contracts for Discord bot ADA payment processing",
+    "version": "1.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.7+e2fb28b"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "payment_validator.simple_payment_validator.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/payment_validator~1PaymentData"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/ByteArray"
+        }
+      },
+      "compiledCode": "5882010100323232323225333002323232323253330073370e900118041baa001132332232533300b3370e900018061baa00213371090001bad300e300f300f300d3754601c601a6ea80085281bae005300b001300b300c001300937540022c601260140066010004600e004600e00260086ea8004526136565734aae7555cf2ba157441",
+      "hash": "586bd4ff0bb18c8b8a264302ca68eb680108e8b266226556fe379e70"
+    },
+    {
+      "title": "payment_validator.simple_payment_validator.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "5882010100323232323225333002323232323253330073370e900118041baa001132332232533300b3370e900018061baa00213371090001bad300e300f300f300d3754601c601a6ea80085281bae005300b001300b300c001300937540022c601260140066010004600e004600e00260086ea8004526136565734aae7555cf2ba157441",
+      "hash": "586bd4ff0bb18c8b8a264302ca68eb680108e8b266226556fe379e70"
+    }
+  ],
+  "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "payment_validator/PaymentData": {
+      "title": "PaymentData",
+      "anyOf": [
+        {
+          "title": "PaymentData",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "discord_user_id",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "tier",
+              "$ref": "#/definitions/payment_validator~1SubscriptionTier"
+            },
+            {
+              "title": "amount_paid",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "duration_months",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "payment_validator/SubscriptionTier": {
+      "title": "SubscriptionTier",
+      "anyOf": [
+        {
+          "title": "Premium",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Ultra",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "Server",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    }
+  }
+}

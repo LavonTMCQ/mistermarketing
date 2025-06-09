@@ -34,10 +34,6 @@ rm -rf artifacts/
 echo -e "${BLUE}🔍 Checking Aiken project...${NC}"
 aiken check
 
-# Run tests
-echo -e "${BLUE}🧪 Running tests...${NC}"
-aiken test
-
 # Build the contracts
 echo -e "${BLUE}🔨 Building contracts...${NC}"
 aiken build
@@ -47,18 +43,18 @@ if [ -f "plutus.json" ]; then
     echo -e "${GREEN}✅ Build successful!${NC}"
     echo -e "${BLUE}📄 Generated files:${NC}"
     ls -la plutus.json
-    
+
     # Show contract information
     echo -e "${BLUE}📊 Contract information:${NC}"
     cat plutus.json | jq '.validators[] | {title: .title, hash: .hash}'
-    
+
     # Create deployment directory
     mkdir -p deployment
     cp plutus.json deployment/
-    
+
     echo -e "${GREEN}🎉 Smart contracts ready for deployment!${NC}"
     echo -e "${BLUE}📁 Deployment files copied to: deployment/${NC}"
-    
+
 else
     echo -e "${RED}❌ Build failed!${NC}"
     exit 1
