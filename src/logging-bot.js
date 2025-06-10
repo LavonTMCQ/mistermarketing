@@ -284,6 +284,18 @@ client.on('interactionCreate', async interaction => {
   } else if (interaction.commandName === 'server-usage') {
     const { serverUsageCommand } = require('./commands/payment-commands');
     await serverUsageCommand.execute(interaction);
+  } else if (interaction.commandName === 'flux-kontext') {
+    const { fluxKontextCommand } = require('./premium-ai-commands');
+    await fluxKontextCommand.execute(interaction);
+  } else if (interaction.commandName === 'face-transform') {
+    const { faceToManyCommand } = require('./premium-ai-commands');
+    await faceToManyCommand.execute(interaction);
+  } else if (interaction.commandName === 'kling-video') {
+    const { klingVideoCommand } = require('./premium-ai-commands');
+    await klingVideoCommand.execute(interaction);
+  } else if (interaction.commandName === 'image-to-video') {
+    const { imageToVideoCommand } = require('./premium-ai-commands');
+    await imageToVideoCommand.execute(interaction);
   }
 });
 

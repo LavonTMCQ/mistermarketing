@@ -141,6 +141,109 @@ const serverUsageCommand = new SlashCommandBuilder()
   .setName('server-usage')
   .setDescription('Check server animation usage (admin only)');
 
+// Premium AI Commands (Admin Only)
+const fluxKontextCommand = new SlashCommandBuilder()
+  .setName('flux-kontext')
+  .setDescription('Generate high-quality images with FLUX Kontext Pro (Admin only)')
+  .addStringOption(option =>
+    option.setName('prompt')
+      .setDescription('Detailed description of the image you want to generate')
+      .setRequired(true))
+  .addStringOption(option =>
+    option.setName('style')
+      .setDescription('Image style')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Photorealistic', value: 'photorealistic' },
+        { name: 'Artistic', value: 'artistic' },
+        { name: 'Anime', value: 'anime' },
+        { name: 'Cinematic', value: 'cinematic' },
+        { name: 'Fantasy', value: 'fantasy' }
+      ))
+  .addStringOption(option =>
+    option.setName('aspect_ratio')
+      .setDescription('Image aspect ratio')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Square (1:1)', value: '1:1' },
+        { name: 'Portrait (3:4)', value: '3:4' },
+        { name: 'Landscape (4:3)', value: '4:3' },
+        { name: 'Widescreen (16:9)', value: '16:9' }
+      ));
+
+const faceTransformCommand = new SlashCommandBuilder()
+  .setName('face-transform')
+  .setDescription('Transform faces into different styles (Admin only)')
+  .addAttachmentOption(option =>
+    option.setName('image')
+      .setDescription('Image containing a face to transform')
+      .setRequired(true))
+  .addStringOption(option =>
+    option.setName('style')
+      .setDescription('Transformation style')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Anime Character', value: 'anime' },
+        { name: 'Oil Painting', value: 'oil_painting' },
+        { name: 'Cyberpunk', value: 'cyberpunk' },
+        { name: 'Medieval Portrait', value: 'medieval' },
+        { name: 'Cartoon Style', value: 'cartoon' }
+      ));
+
+const klingVideoCommand = new SlashCommandBuilder()
+  .setName('kling-video')
+  .setDescription('Generate high-quality videos with Kling AI (Admin only)')
+  .addStringOption(option =>
+    option.setName('prompt')
+      .setDescription('Detailed description of the video you want to generate')
+      .setRequired(true))
+  .addStringOption(option =>
+    option.setName('duration')
+      .setDescription('Video duration')
+      .setRequired(false)
+      .addChoices(
+        { name: '5 seconds', value: '5' },
+        { name: '10 seconds', value: '10' },
+        { name: '15 seconds', value: '15' }
+      ))
+  .addStringOption(option =>
+    option.setName('style')
+      .setDescription('Video style')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Cinematic', value: 'cinematic' },
+        { name: 'Realistic', value: 'realistic' },
+        { name: 'Artistic', value: 'artistic' },
+        { name: 'Fantasy', value: 'fantasy' }
+      ));
+
+const imageToVideoCommand = new SlashCommandBuilder()
+  .setName('image-to-video')
+  .setDescription('Convert static images to cinematic videos (Admin only)')
+  .addAttachmentOption(option =>
+    option.setName('image')
+      .setDescription('Static image to animate')
+      .setRequired(true))
+  .addStringOption(option =>
+    option.setName('motion')
+      .setDescription('Type of motion to add')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Subtle Movement', value: 'subtle' },
+        { name: 'Dynamic Motion', value: 'dynamic' },
+        { name: 'Cinematic Pan', value: 'cinematic' },
+        { name: 'Zoom Effect', value: 'zoom' }
+      ))
+  .addStringOption(option =>
+    option.setName('duration')
+      .setDescription('Video duration')
+      .setRequired(false)
+      .addChoices(
+        { name: '3 seconds', value: '3' },
+        { name: '5 seconds', value: '5' },
+        { name: '8 seconds', value: '8' }
+      ));
+
 const commands = [
   stickerizeCommand.toJSON(),
   statsCommand.toJSON(),
@@ -151,7 +254,11 @@ const commands = [
   adminVerifyCommand.toJSON(),
   adminDebugCommand.toJSON(),
   adminBalanceCommand.toJSON(),
-  serverUsageCommand.toJSON()
+  serverUsageCommand.toJSON(),
+  fluxKontextCommand.toJSON(),
+  faceTransformCommand.toJSON(),
+  klingVideoCommand.toJSON(),
+  imageToVideoCommand.toJSON()
 ];
 
 // Construct and prepare an instance of the REST module
