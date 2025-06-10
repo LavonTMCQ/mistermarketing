@@ -26,47 +26,80 @@ class CardanoVerifier {
       console.log(`💰 Expected amount: ${expectedAmount} ADA`);
       console.log(`🏠 Payment address: ${this.paymentAddress}`);
 
+      // Validate transaction hash format
+      if (!txHash || txHash.length < 60) {
+        return {
+          verified: false,
+          error: 'Invalid transaction hash format (too short)'
+        };
+      }
+
       // Try to get transaction details from Koios API
+      console.log(`🌐 Calling Koios API: ${CARDANO_APIS.koios}/tx_info?_tx_hashes=${txHash}`);
+
       const txResponse = await axios.get(
         `${CARDANO_APIS.koios}/tx_info?_tx_hashes=${txHash}`,
         {
           headers: {
             'Accept': 'application/json'
           },
-          timeout: 10000
+          timeout: 15000 // Increased timeout
         }
       );
 
+      console.log(`📡 API Response status: ${txResponse.status}`);
+      console.log(`📊 API Response data length: ${txResponse.data?.length || 0}`);
+
       if (!txResponse.data || txResponse.data.length === 0) {
+        console.log('❌ Transaction not found in API response');
         return {
           verified: false,
-          error: 'Transaction not found on blockchain'
+          error: 'Transaction not found on blockchain. Please wait a few minutes for confirmation and try again.'
         };
       }
 
       const txData = txResponse.data[0];
       console.log(`📊 Transaction found: ${txData.tx_hash}`);
+      console.log(`🔍 Transaction status: ${txData.status || 'unknown'}`);
+      console.log(`📦 Block height: ${txData.block_height || 'pending'}`);
 
       // Check transaction outputs for payments to YOUR wallet address
       let totalSentToWallet = 0;
       let foundPayment = false;
+      let outputsChecked = 0;
 
-      if (txData.outputs) {
+      console.log(`🔍 Checking transaction outputs...`);
+
+      if (txData.outputs && Array.isArray(txData.outputs)) {
+        console.log(`📋 Found ${txData.outputs.length} outputs to check`);
+
         for (const output of txData.outputs) {
+          outputsChecked++;
+          console.log(`🔍 Output ${outputsChecked}: ${output.address} = ${output.value} lovelace`);
+
           if (output.address === this.paymentAddress) {
             // Convert lovelace to ADA (1 ADA = 1,000,000 lovelace)
             const adaAmount = parseInt(output.value) / 1000000;
             totalSentToWallet += adaAmount;
             foundPayment = true;
-            console.log(`💰 Found payment: ${adaAmount} ADA to your wallet`);
+            console.log(`💰 ✅ Found payment: ${adaAmount} ADA to your wallet!`);
+          } else {
+            console.log(`❌ Output to different address: ${output.address}`);
           }
         }
+      } else {
+        console.log(`❌ No outputs found in transaction data`);
+        console.log(`📊 Transaction data structure:`, JSON.stringify(txData, null, 2));
       }
+
+      console.log(`📊 Summary: Checked ${outputsChecked} outputs, found ${foundPayment ? 'payment' : 'no payment'}`);
+      console.log(`💰 Total sent to wallet: ${totalSentToWallet} ADA`);
+      console.log(`🎯 Expected amount: ${expectedAmount} ADA`);
 
       if (!foundPayment) {
         return {
           verified: false,
-          error: 'No payment found to your wallet address'
+          error: `No payment found to your wallet address. Transaction sent to other addresses. Expected: ${this.paymentAddress}`
         };
       }
 
@@ -93,16 +126,35 @@ class CardanoVerifier {
 
     } catch (error) {
       console.error('Cardano verification error:', error.message);
+      console.error('Error details:', error.response?.data || error.code);
 
-      // If API is down, fall back to mock verification for development
-      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      // If API is down or having issues, fall back to mock verification for development
+      if (error.code === 'ECONNREFUSED' ||
+          error.code === 'ENOTFOUND' ||
+          error.code === 'ETIMEDOUT' ||
+          error.response?.status >= 500) {
         console.log('⚠️ Cardano API unavailable, using mock verification for development');
         return this.mockVerification(txHash, expectedAmount, discordUserId);
       }
 
+      // For 4xx errors, provide more specific feedback
+      if (error.response?.status === 404) {
+        return {
+          verified: false,
+          error: 'Transaction not found. Please wait a few minutes for blockchain confirmation and try again.'
+        };
+      }
+
+      if (error.response?.status === 429) {
+        return {
+          verified: false,
+          error: 'API rate limit exceeded. Please try again in a few minutes.'
+        };
+      }
+
       return {
         verified: false,
-        error: `Verification failed: ${error.message}`
+        error: `Verification failed: ${error.message}. Please try again or contact support.`
       };
     }
   }

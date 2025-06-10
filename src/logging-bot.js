@@ -144,6 +144,15 @@ client.on('interactionCreate', async interaction => {
   } else if (interaction.commandName === 'server-status') {
     const { serverStatusCommand } = require('./commands/payment-commands');
     await serverStatusCommand.execute(interaction);
+  } else if (interaction.commandName === 'admin-verify') {
+    const { manualVerifyCommand } = require('./admin-commands');
+    await manualVerifyCommand.execute(interaction);
+  } else if (interaction.commandName === 'admin-debug-tx') {
+    const { debugTransactionCommand } = require('./admin-commands');
+    await debugTransactionCommand.execute(interaction);
+  } else if (interaction.commandName === 'admin-balance') {
+    const { checkBalanceCommand } = require('./admin-commands');
+    await checkBalanceCommand.execute(interaction);
   }
 });
 

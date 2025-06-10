@@ -96,13 +96,60 @@ const serverStatusCommand = new SlashCommandBuilder()
   .setName('server-status')
   .setDescription('Check server subscription status (admin only)');
 
+// Admin commands for debugging
+const adminVerifyCommand = new SlashCommandBuilder()
+  .setName('admin-verify')
+  .setDescription('Manually verify a payment (admin only)')
+  .addUserOption(option =>
+    option.setName('user')
+      .setDescription('User to grant subscription to')
+      .setRequired(true))
+  .addStringOption(option =>
+    option.setName('tier')
+      .setDescription('Subscription tier')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Premium', value: 'Premium' },
+        { name: 'Ultra', value: 'Ultra' },
+        { name: 'Server', value: 'Server' }
+      ))
+  .addIntegerOption(option =>
+    option.setName('duration')
+      .setDescription('Duration in months')
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(12))
+  .addStringOption(option =>
+    option.setName('transaction_hash')
+      .setDescription('Transaction hash (optional)')
+      .setRequired(false));
+
+const adminDebugCommand = new SlashCommandBuilder()
+  .setName('admin-debug-tx')
+  .setDescription('Debug a transaction hash (admin only)')
+  .addStringOption(option =>
+    option.setName('transaction_hash')
+      .setDescription('Transaction hash to debug')
+      .setRequired(true))
+  .addNumberOption(option =>
+    option.setName('expected_amount')
+      .setDescription('Expected ADA amount')
+      .setRequired(true));
+
+const adminBalanceCommand = new SlashCommandBuilder()
+  .setName('admin-balance')
+  .setDescription('Check wallet balance (admin only)');
+
 const commands = [
   stickerizeCommand.toJSON(),
   statsCommand.toJSON(),
   subscribeCommand.toJSON(),
   verifyPaymentCommand.toJSON(),
   subscriptionStatusCommand.toJSON(),
-  serverStatusCommand.toJSON()
+  serverStatusCommand.toJSON(),
+  adminVerifyCommand.toJSON(),
+  adminDebugCommand.toJSON(),
+  adminBalanceCommand.toJSON()
 ];
 
 // Construct and prepare an instance of the REST module
