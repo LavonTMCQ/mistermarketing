@@ -18,5 +18,15 @@
     "isActive": true,
     "txHash": "bcef8a9280f049303277d3cdb6edb2310e1b1b32426a90fa8db982d413a38640",
     "createdAt": "2025-06-10T01:40:38.140Z"
+  },
+  "913093502911537162": {
+    "tier": "Premium",
+    "startTime": 1749521149600,
+    "endTime": 1780625149600,
+    "amountPaid": 180,
+    "durationMonths": 12,
+    "isActive": true,
+    "txHash": "admin_manual_grant",
+    "createdAt": "2025-06-10T02:05:49.600Z"
   }
 }

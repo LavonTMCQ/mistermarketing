@@ -432,45 +432,58 @@ async function handleStickerizeCommand(interaction) {
 
     // Check if user requested premium quality
     if (quality === 'premium' || quality === 'ultra') {
-      const premiumEmbed = {
-        color: 0x9b59b6,
-        title: '💎 Premium Quality Coming Soon!',
-        description: 'You\'ve selected premium quality animation. We\'re building something revolutionary!',
-        fields: [
-          {
-            name: '🪙 Cardano Smart Contract Payments',
-            value: 'Pay with ADA cryptocurrency for premium features!\n• Instant payments\n• Decentralized\n• Lower fees than traditional payments',
-            inline: false
-          },
-          {
-            name: '🔥 Premium Features (Coming Soon)',
-            value: '💎 **Premium Quality**: MiniMax Video-01-Live model\n🔥 **Ultra Quality**: Latest AI models\n⚡ **Priority Processing**: Skip the queue\n🎨 **Advanced Styles**: Exclusive animation effects',
-            inline: false
-          },
-          {
-            name: '📅 Launch Timeline',
-            value: '**Phase 1**: Smart contract development (2-4 weeks)\n**Phase 2**: ADA payment integration (1-2 weeks)\n**Phase 3**: Premium model deployment (1 week)',
-            inline: false
-          },
-          {
-            name: '🚀 Be a Beta Tester!',
-            value: 'Want early access? Join our Discord community and help test the Cardano integration!',
-            inline: false
-          }
-        ],
-        footer: {
-          text: 'Stickerize Bot - Revolutionizing Discord payments with Cardano! 🪙'
-        },
-        timestamp: new Date().toISOString()
-      };
+      // Check if user has access to premium quality
+      const hasAccess = userId === process.env.ADMIN_USER_ID ||
+                       channelId === process.env.VIP_CHANNEL_ID ||
+                       effectiveTier === 'Premium' ||
+                       effectiveTier === 'Server' ||
+                       effectiveTier === 'Admin' ||
+                       effectiveTier === 'VIP';
 
-      await interaction.followUp({
-        embeds: [premiumEmbed],
-        ephemeral: true
-      });
+      if (!hasAccess) {
+        const premiumEmbed = {
+          color: 0x9b59b6,
+          title: '💎 Premium Quality Available!',
+          description: 'You\'ve selected premium quality animation. Upgrade to access premium features!',
+          fields: [
+            {
+              name: '🪙 Cardano Smart Contract Payments',
+              value: 'Pay with ADA cryptocurrency for premium features!\n• Instant payments\n• Decentralized\n• Secure blockchain verification',
+              inline: false
+            },
+            {
+              name: '🔥 Premium Features Available Now',
+              value: '💎 **Premium Quality**: Enhanced AI models\n🔥 **Ultra Quality**: Latest generation models\n⚡ **Priority Processing**: Skip the queue\n🎨 **Advanced Styles**: Exclusive animation effects',
+              inline: false
+            },
+            {
+              name: '🚀 Upgrade Now',
+              value: '**Premium**: 15 ADA/month for unlimited premium animations\n**Server**: 100 ADA/month for server-wide premium access\n\nUse `/subscribe` to upgrade!',
+              inline: false
+            }
+          ],
+          footer: {
+            text: 'Stickerize Bot - Powered by Cardano smart contracts! 🪙'
+          },
+          timestamp: new Date().toISOString()
+        };
 
-      // For now, continue with standard quality
-      fs.appendFileSync('bot-log.txt', `User ${userId} requested ${quality} quality, shown coming soon message, proceeding with standard\n`);
+        await interaction.followUp({
+          embeds: [premiumEmbed],
+          ephemeral: true
+        });
+
+        // For non-premium users, continue with standard quality
+        fs.appendFileSync('bot-log.txt', `User ${userId} requested ${quality} quality but lacks access, shown upgrade message, proceeding with standard\n`);
+      } else {
+        // User has access - proceed with premium quality
+        fs.appendFileSync('bot-log.txt', `User ${userId} (${effectiveTier}) has access to ${quality} quality, proceeding with premium processing\n`);
+
+        await interaction.followUp({
+          content: `🔥 Processing with ${quality} quality! This may take a bit longer for the enhanced results...`,
+          ephemeral: false
+        });
+      }
     }
 
     if (!attachment) {
@@ -578,40 +591,83 @@ async function handleStickerizeCommand(interaction) {
     const imageBuffer = fs.readFileSync(processedImagePath);
     const base64Image = imageBuffer.toString('base64');
 
-    // Determine animation parameters based on style
-    let motionBucketId, fps, numFrames;
+    // Determine animation parameters based on style and quality
+    let motionBucketId, fps, numFrames, modelVersion;
 
-    switch (animationStyle) {
-      case 'dramatic':
-        motionBucketId = 180; // More motion
-        fps = 10;
-        numFrames = 20;
-        break;
-      case 'subtle':
-        motionBucketId = 80; // Less motion
-        fps = 6;
-        numFrames = 12;
-        break;
-      case 'live2d':
-        motionBucketId = 100; // Moderate motion, good for characters
-        fps = 8;
-        numFrames = 16;
-        break;
-      case 'smooth':
-      default:
-        motionBucketId = 127; // Default balanced motion
-        fps = 8;
-        numFrames = 16;
-        break;
+    // Check if user has premium access
+    const hasPremiumAccess = userId === process.env.ADMIN_USER_ID ||
+                            channelId === process.env.VIP_CHANNEL_ID ||
+                            effectiveTier === 'Premium' ||
+                            effectiveTier === 'Server' ||
+                            effectiveTier === 'Admin' ||
+                            effectiveTier === 'VIP';
+
+    // Use premium model if user has access and requested premium/ultra quality
+    if (hasPremiumAccess && (quality === 'premium' || quality === 'ultra')) {
+      // Premium/Ultra quality settings
+      modelVersion = 'd68b6e09eedbac7a49e3d8644999d93579c386a083768235cabca88796d70d82'; // Same model but with enhanced settings
+
+      switch (animationStyle) {
+        case 'dramatic':
+          motionBucketId = 200; // Enhanced motion for premium
+          fps = 12;
+          numFrames = 25;
+          break;
+        case 'subtle':
+          motionBucketId = 100; // Enhanced subtle motion
+          fps = 8;
+          numFrames = 16;
+          break;
+        case 'live2d':
+          motionBucketId = 120; // Enhanced character motion
+          fps = 10;
+          numFrames = 20;
+          break;
+        case 'smooth':
+        default:
+          motionBucketId = 150; // Enhanced smooth motion
+          fps = 10;
+          numFrames = 20;
+          break;
+      }
+
+      fs.appendFileSync('bot-log.txt', `Using PREMIUM animation parameters: motion=${motionBucketId}, fps=${fps}, frames=${numFrames}\n`);
+    } else {
+      // Standard quality settings
+      modelVersion = 'd68b6e09eedbac7a49e3d8644999d93579c386a083768235cabca88796d70d82';
+
+      switch (animationStyle) {
+        case 'dramatic':
+          motionBucketId = 180; // More motion
+          fps = 10;
+          numFrames = 20;
+          break;
+        case 'subtle':
+          motionBucketId = 80; // Less motion
+          fps = 6;
+          numFrames = 12;
+          break;
+        case 'live2d':
+          motionBucketId = 100; // Moderate motion, good for characters
+          fps = 8;
+          numFrames = 16;
+          break;
+        case 'smooth':
+        default:
+          motionBucketId = 127; // Default balanced motion
+          fps = 8;
+          numFrames = 16;
+          break;
+      }
+
+      fs.appendFileSync('bot-log.txt', `Using STANDARD animation parameters: motion=${motionBucketId}, fps=${fps}, frames=${numFrames}\n`);
     }
-
-    fs.appendFileSync('bot-log.txt', `Using animation parameters: motion=${motionBucketId}, fps=${fps}, frames=${numFrames}\n`);
 
     // Call Replicate API
     const replicateResponse = await axios.post(
       'https://api.replicate.com/v1/predictions',
       {
-        version: 'd68b6e09eedbac7a49e3d8644999d93579c386a083768235cabca88796d70d82',
+        version: modelVersion,
         input: {
           input_image: `data:image/png;base64,${base64Image}`,
           motion_bucket_id: motionBucketId,
@@ -981,7 +1037,7 @@ async function handleStatsCommand(interaction) {
         },
         {
           name: '⏱️ Rate Limits',
-          value: `**Current Limit:** ${HOURLY_LIMIT} animations per hour\n**Reset Interval:** Every 60 minutes\n**Purpose:** Keep the bot running smoothly for everyone!`,
+          value: `**Free Servers:** 5 animations/hour, 25/day (shared)\n**Premium Users:** Unlimited animations\n**Server Subscriptions:** Unlimited for all members\n**Purpose:** Keep the bot running smoothly for everyone!`,
           inline: false
         }
       ],
