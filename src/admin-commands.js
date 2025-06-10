@@ -30,7 +30,6 @@ const manualVerifyCommand = {
         .setRequired(true)
         .addChoices(
           { name: 'Premium', value: 'Premium' },
-          { name: 'Ultra', value: 'Ultra' },
           { name: 'Server', value: 'Server' }
         ))
     .addIntegerOption(option =>

@@ -54,9 +54,8 @@ const subscribeCommand = new SlashCommandBuilder()
       .setDescription('Subscription tier')
       .setRequired(true)
       .addChoices(
-        { name: 'Premium - 15 ADA/month', value: 'Premium' },
-        { name: 'Ultra - 25 ADA/month', value: 'Ultra' },
-        { name: 'Server - 100 ADA/month', value: 'Server' }
+        { name: 'Premium - 15 ADA/month (Unlimited)', value: 'Premium' },
+        { name: 'Server - 100 ADA/month (Server-wide)', value: 'Server' }
       ))
   .addIntegerOption(option =>
     option.setName('duration')
@@ -78,7 +77,6 @@ const verifyPaymentCommand = new SlashCommandBuilder()
       .setRequired(true)
       .addChoices(
         { name: 'Premium', value: 'Premium' },
-        { name: 'Ultra', value: 'Ultra' },
         { name: 'Server', value: 'Server' }
       ))
   .addIntegerOption(option =>
@@ -110,7 +108,6 @@ const adminVerifyCommand = new SlashCommandBuilder()
       .setRequired(true)
       .addChoices(
         { name: 'Premium', value: 'Premium' },
-        { name: 'Ultra', value: 'Ultra' },
         { name: 'Server', value: 'Server' }
       ))
   .addIntegerOption(option =>
@@ -140,6 +137,10 @@ const adminBalanceCommand = new SlashCommandBuilder()
   .setName('admin-balance')
   .setDescription('Check wallet balance (admin only)');
 
+const serverUsageCommand = new SlashCommandBuilder()
+  .setName('server-usage')
+  .setDescription('Check server animation usage (admin only)');
+
 const commands = [
   stickerizeCommand.toJSON(),
   statsCommand.toJSON(),
@@ -149,7 +150,8 @@ const commands = [
   serverStatusCommand.toJSON(),
   adminVerifyCommand.toJSON(),
   adminDebugCommand.toJSON(),
-  adminBalanceCommand.toJSON()
+  adminBalanceCommand.toJSON(),
+  serverUsageCommand.toJSON()
 ];
 
 // Construct and prepare an instance of the REST module

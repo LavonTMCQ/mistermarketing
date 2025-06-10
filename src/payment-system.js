@@ -216,29 +216,22 @@ class PaymentVerifier {
 
 const TIER_PRICING = {
   Premium: {
-    monthly: 15, // ADA per month
-    features: [
-      '50 animations per hour',
-      'Premium quality models',
-      'Priority processing',
-      'Background removal included'
-    ]
-  },
-  Ultra: {
-    monthly: 25, // ADA per month
+    monthly: 15, // ADA per month (Merged Premium + Ultra)
     features: [
       'Unlimited animations',
-      'Ultra quality models',
-      'Instant processing',
-      'All premium features',
-      'Beta feature access'
+      'All animation styles',
+      'Premium quality models',
+      'Priority processing',
+      'Background removal included',
+      'All premium features'
     ]
   },
   Server: {
     monthly: 100, // ADA per month
     features: [
       'Server-wide premium access',
-      'All ultra features',
+      'Unlimited animations for all members',
+      'All premium features',
       'Custom branding',
       'Priority support',
       'Analytics dashboard'

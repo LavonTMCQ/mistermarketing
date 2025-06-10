@@ -23,9 +23,8 @@ const subscribeCommand = {
         .setDescription('Subscription tier')
         .setRequired(true)
         .addChoices(
-          { name: 'Premium - 15 ADA/month', value: 'Premium' },
-          { name: 'Ultra - 25 ADA/month', value: 'Ultra' },
-          { name: 'Server - 100 ADA/month', value: 'Server' }
+          { name: 'Premium - 15 ADA/month (Unlimited)', value: 'Premium' },
+          { name: 'Server - 100 ADA/month (Server-wide)', value: 'Server' }
         ))
     .addIntegerOption(option =>
       option.setName('duration')
@@ -111,7 +110,6 @@ const verifyPaymentCommand = {
         .setRequired(true)
         .addChoices(
           { name: 'Premium', value: 'Premium' },
-          { name: 'Ultra', value: 'Ultra' },
           { name: 'Server', value: 'Server' }
         ))
     .addIntegerOption(option =>
@@ -214,7 +212,7 @@ const verifyPaymentCommand = {
             { name: '⏱️ Duration', value: `${duration} month${duration > 1 ? 's' : ''}`, inline: true },
             { name: '💰 Amount Paid', value: `${verification.amount} ADA`, inline: true },
             { name: '📅 Expires', value: `<t:${Math.floor(subscription.endTime / 1000)}:F>`, inline: false },
-            { name: '✨ Features', value: tier === 'Ultra' ? 'Unlimited animations across all servers!' : '50 animations per hour across all servers!', inline: false },
+            { name: '✨ Features', value: 'Unlimited animations across all servers!', inline: false },
             { name: '🔗 Transaction', value: `\`${txHash}\``, inline: false }
           )
           .setFooter({ text: 'Thank you for supporting Stickerize Bot!' })
@@ -380,6 +378,98 @@ const serverStatusCommand = {
 };
 
 // =============================================================================
+// SERVER USAGE COMMAND
+// =============================================================================
+
+const serverUsageCommand = {
+  data: new SlashCommandBuilder()
+    .setName('server-usage')
+    .setDescription('Check server animation usage (admin only)'),
+
+  async execute(interaction) {
+    try {
+      // Check if user has admin permissions
+      if (!interaction.member.permissions.has('Administrator')) {
+        return interaction.reply({
+          content: '❌ You need Administrator permissions to check server usage.',
+          ephemeral: true
+        });
+      }
+
+      const guildId = interaction.guildId;
+      if (!guildId) {
+        return interaction.reply({
+          content: '❌ This command can only be used in servers.',
+          ephemeral: true
+        });
+      }
+
+      // Get server usage data from the main bot file
+      // We'll need to import this or access it differently
+      const { checkServerUsage, isServerPremium, SERVER_LIMITS } = require('../logging-bot');
+
+      const serverData = checkServerUsage(guildId);
+      const isPremium = isServerPremium(guildId, interaction.user.id, interaction.channelId);
+
+      if (isPremium) {
+        const embed = new EmbedBuilder()
+          .setColor('#4ecdc4')
+          .setTitle('🏢 Server Usage - Premium')
+          .setDescription('This server has unlimited animations!')
+          .addFields(
+            { name: '🎯 Status', value: '✅ Premium Server', inline: true },
+            { name: '⚡ Rate Limit', value: 'Unlimited', inline: true },
+            { name: '💎 Benefits', value: 'All members have unlimited access', inline: false }
+          )
+          .setFooter({ text: 'Thank you for supporting Stickerize Bot!' });
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      if (!serverData) {
+        const embed = new EmbedBuilder()
+          .setColor('#ffa726')
+          .setTitle('🏢 Server Usage - Free Tier')
+          .setDescription('No usage recorded yet for this server.')
+          .addFields(
+            { name: '⚡ Hourly Limit', value: `0/${SERVER_LIMITS.Free.hourly} animations`, inline: true },
+            { name: '📅 Daily Limit', value: `0/${SERVER_LIMITS.Free.daily} animations`, inline: true },
+            { name: '🚀 Upgrade', value: 'Use `/subscribe Server 1` for unlimited access!', inline: false }
+          );
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      const hourlyMinutesLeft = Math.ceil((serverData.hourlyResetTime - Date.now()) / (1000 * 60));
+      const dailyHoursLeft = Math.ceil((serverData.dailyResetTime - Date.now()) / (1000 * 60 * 60));
+
+      const embed = new EmbedBuilder()
+        .setColor('#ffa726')
+        .setTitle('🏢 Server Usage - Free Tier')
+        .setDescription('Current server animation usage:')
+        .addFields(
+          { name: '⚡ Hourly Usage', value: `${serverData.hourlyCount}/${SERVER_LIMITS.Free.hourly} animations`, inline: true },
+          { name: '🔄 Hourly Reset', value: `${hourlyMinutesLeft} minutes`, inline: true },
+          { name: '📅 Daily Usage', value: `${serverData.dailyCount}/${SERVER_LIMITS.Free.daily} animations`, inline: true },
+          { name: '🔄 Daily Reset', value: `${dailyHoursLeft} hours`, inline: true },
+          { name: '💡 Free Server Limits', value: 'Free servers share animation pools to keep the service sustainable for everyone.', inline: false },
+          { name: '🚀 Upgrade Server', value: '**Server Subscription**: 100 ADA/month for unlimited animations for ALL members!\n\nUse `/subscribe Server 1` to upgrade!', inline: false }
+        )
+        .setFooter({ text: 'Server limits encourage fair usage across all communities' });
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+
+    } catch (error) {
+      console.error('Server usage command error:', error);
+      await interaction.reply({
+        content: '❌ An error occurred while checking server usage.',
+        ephemeral: true
+      });
+    }
+  }
+};
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -388,6 +478,7 @@ module.exports = {
   verifyPaymentCommand,
   statusCommand,
   serverStatusCommand,
+  serverUsageCommand,
   subscriptionManager,
   paymentVerifier
 };

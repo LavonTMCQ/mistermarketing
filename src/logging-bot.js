@@ -14,19 +14,68 @@ const { ServerManager } = require('./server-management');
 
 // Tier-based rate limiting
 const userUsage = new Map(); // userId -> { count, resetTime }
+const serverUsage = new Map(); // guildId -> { hourlyCount, dailyCount, hourlyResetTime, dailyResetTime }
 const RESET_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+const DAILY_RESET_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
-// Rate limits by tier
+// Rate limits by tier (Updated: Merged Premium and Ultra)
 const TIER_LIMITS = {
-  'Standard': 10,    // Free tier: 10 animations per hour
-  'Premium': 50,     // Premium tier: 50 animations per hour
-  'Ultra': 999999,   // Ultra tier: Unlimited
-  'Server': 999999   // Server tier: Unlimited
+  'Standard': 10,    // Free tier: 10 animations per hour (individual)
+  'Premium': 999999, // Premium tier: Unlimited (merged with Ultra)
+  'Server': 999999,  // Server tier: Unlimited
+  'Admin': 999999,   // Admin: Unlimited
+  'VIP': 999999      // VIP Channel: Unlimited
+};
+
+// Server-wide rate limits for free servers
+const SERVER_LIMITS = {
+  'Free': {
+    hourly: 5,   // 5 animations per hour for entire server
+    daily: 25    // 25 animations per day for entire server
+  }
 };
 
 // Helper function to get next reset time (1 hour from now)
 function getNextResetTime() {
   return Date.now() + RESET_INTERVAL;
+}
+
+// Helper function to get next daily reset time (24 hours from now)
+function getNextDailyResetTime() {
+  return Date.now() + DAILY_RESET_INTERVAL;
+}
+
+// Helper function to check/initialize server usage
+function checkServerUsage(guildId) {
+  if (!guildId) return null; // No server tracking for DMs
+
+  const now = Date.now();
+  let serverData = serverUsage.get(guildId);
+
+  if (!serverData) {
+    // Initialize new server data
+    serverData = {
+      hourlyCount: 0,
+      dailyCount: 0,
+      hourlyResetTime: getNextResetTime(),
+      dailyResetTime: getNextDailyResetTime()
+    };
+    serverUsage.set(guildId, serverData);
+  }
+
+  // Reset hourly count if time has passed
+  if (now >= serverData.hourlyResetTime) {
+    serverData.hourlyCount = 0;
+    serverData.hourlyResetTime = getNextResetTime();
+  }
+
+  // Reset daily count if time has passed
+  if (now >= serverData.dailyResetTime) {
+    serverData.dailyCount = 0;
+    serverData.dailyResetTime = getNextDailyResetTime();
+  }
+
+  return serverData;
 }
 
 // Helper function to check and update user usage
@@ -49,8 +98,18 @@ function checkUserUsage(userId) {
 }
 
 // Helper function to get user's rate limit based on tier (including server subscriptions)
-function getUserRateLimit(userId, guildId) {
-  // Check server subscription first
+function getUserRateLimit(userId, guildId, channelId) {
+  // Check if user is admin (you)
+  if (userId === process.env.ADMIN_USER_ID) {
+    return TIER_LIMITS['Admin']; // Unlimited for admin
+  }
+
+  // Check if in VIP channel
+  if (channelId === process.env.VIP_CHANNEL_ID) {
+    return TIER_LIMITS['VIP']; // Unlimited for VIP channel
+  }
+
+  // Check server subscription
   if (guildId && serverManager && serverManager.hasActiveServerSubscription(guildId)) {
     return TIER_LIMITS['Server']; // Unlimited for server subscriptions
   }
@@ -61,24 +120,93 @@ function getUserRateLimit(userId, guildId) {
 }
 
 // Helper function to increment user usage
-function incrementUserUsage(userId, guildId) {
+function incrementUserUsage(userId, guildId, channelId) {
   const userData = checkUserUsage(userId);
-  const userLimit = getUserRateLimit(userId, guildId);
-  const effectiveTier = getEffectiveUserTier(userId, guildId);
+  const userLimit = getUserRateLimit(userId, guildId, channelId);
+  const effectiveTier = getEffectiveUserTier(userId, guildId, channelId);
   userData.count++;
+
+  // Also increment server usage for free servers
+  if (guildId && !isServerPremium(guildId, userId, channelId)) {
+    const serverData = checkServerUsage(guildId);
+    if (serverData) {
+      serverData.hourlyCount++;
+      serverData.dailyCount++;
+      fs.appendFileSync('bot-log.txt', `Server ${guildId} usage: ${serverData.hourlyCount}/${SERVER_LIMITS.Free.hourly} hourly, ${serverData.dailyCount}/${SERVER_LIMITS.Free.daily} daily\n`);
+    }
+  }
+
   fs.appendFileSync('bot-log.txt', `User ${userId} (${effectiveTier}) usage: ${userData.count}/${userLimit} (resets in ${Math.ceil((userData.resetTime - Date.now()) / (1000 * 60))} minutes)\n`);
 }
 
 // Helper function to check if user is over limit
-function isUserOverLimit(userId, guildId) {
+function isUserOverLimit(userId, guildId, channelId) {
+  // Check individual user limit first
   const userData = checkUserUsage(userId);
-  const userLimit = getUserRateLimit(userId, guildId);
-  return userData.count >= userLimit;
+  const userLimit = getUserRateLimit(userId, guildId, channelId);
+
+  if (userData.count >= userLimit) {
+    return { limited: true, reason: 'individual', userData, userLimit };
+  }
+
+  // For free servers, also check server-wide limits
+  if (guildId && !isServerPremium(guildId, userId, channelId)) {
+    const serverData = checkServerUsage(guildId);
+    if (serverData) {
+      // Check hourly server limit
+      if (serverData.hourlyCount >= SERVER_LIMITS.Free.hourly) {
+        return {
+          limited: true,
+          reason: 'server_hourly',
+          serverData,
+          limit: SERVER_LIMITS.Free.hourly,
+          resetTime: serverData.hourlyResetTime
+        };
+      }
+
+      // Check daily server limit
+      if (serverData.dailyCount >= SERVER_LIMITS.Free.daily) {
+        return {
+          limited: true,
+          reason: 'server_daily',
+          serverData,
+          limit: SERVER_LIMITS.Free.daily,
+          resetTime: serverData.dailyResetTime
+        };
+      }
+    }
+  }
+
+  return { limited: false };
+}
+
+// Helper function to check if server has premium features
+function isServerPremium(guildId, userId, channelId) {
+  // Admin always has premium
+  if (userId === process.env.ADMIN_USER_ID) return true;
+
+  // VIP channel always has premium
+  if (channelId === process.env.VIP_CHANNEL_ID) return true;
+
+  // Server subscription gives premium
+  if (guildId && serverManager && serverManager.hasActiveServerSubscription(guildId)) return true;
+
+  return false;
 }
 
 // Helper function to get effective user tier (considering server subscriptions)
-function getEffectiveUserTier(userId, guildId) {
-  // Check server subscription first
+function getEffectiveUserTier(userId, guildId, channelId) {
+  // Check if user is admin (you)
+  if (userId === process.env.ADMIN_USER_ID) {
+    return 'Admin';
+  }
+
+  // Check if in VIP channel
+  if (channelId === process.env.VIP_CHANNEL_ID) {
+    return 'VIP';
+  }
+
+  // Check server subscription
   if (guildId && serverManager && serverManager.hasActiveServerSubscription(guildId)) {
     return 'Server';
   }
@@ -153,6 +281,9 @@ client.on('interactionCreate', async interaction => {
   } else if (interaction.commandName === 'admin-balance') {
     const { checkBalanceCommand } = require('./admin-commands');
     await checkBalanceCommand.execute(interaction);
+  } else if (interaction.commandName === 'server-usage') {
+    const { serverUsageCommand } = require('./commands/payment-commands');
+    await serverUsageCommand.execute(interaction);
   }
 });
 
@@ -166,56 +297,126 @@ async function handleStickerizeCommand(interaction) {
     // Check rate limiting
     const userId = interaction.user.id;
     const guildId = interaction.guildId;
+    const channelId = interaction.channelId;
     const userData = checkUserUsage(userId);
-    const effectiveTier = getEffectiveUserTier(userId, guildId);
-    const userLimit = getUserRateLimit(userId, guildId);
+    const effectiveTier = getEffectiveUserTier(userId, guildId, channelId);
+    const userLimit = getUserRateLimit(userId, guildId, channelId);
 
-    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Tier: ${effectiveTier}, Usage: ${userData.count}/${userLimit}, Guild: ${guildId}\n`);
+    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Tier: ${effectiveTier}, Usage: ${userData.count}/${userLimit}, Guild: ${guildId}, Channel: ${channelId}\n`);
 
-    // Check if user has exceeded hourly limit
-    if (isUserOverLimit(userId, guildId)) {
-      const minutesUntilReset = Math.ceil((userData.resetTime - Date.now()) / (1000 * 60));
+    // Check if user has exceeded limits
+    const limitCheck = isUserOverLimit(userId, guildId, channelId);
+    if (limitCheck.limited) {
+      let rateLimitEmbed;
 
-      const rateLimitEmbed = {
-        color: 0xffa500,
-        title: '⏱️ Rate Limit Reached',
-        description: `You've used all **${userLimit}** animations this hour on your **${effectiveTier}** tier.`,
-        fields: [
-          {
-            name: '🎯 Current Tier',
-            value: effectiveTier,
-            inline: true
-          },
-          {
-            name: '🔄 Limit Resets In',
-            value: `${minutesUntilReset} minutes`,
-            inline: true
-          },
-          {
-            name: '🚀 Upgrade Options',
-            value: effectiveTier === 'Standard' ?
-              '**Personal**: Premium (50/hr) or Ultra (unlimited)\n**Server**: 100 ADA/month for unlimited server-wide access\n\nUse `/subscribe` to upgrade!' :
-              effectiveTier === 'Server' ? 'Server has unlimited access! 🎉' : 'You\'re already on a premium tier! 🎉',
-            inline: false
-          }
-        ],
-        footer: {
-          text: 'Thanks for using Stickerize Bot! 🎨'
-        },
-        timestamp: new Date().toISOString()
+      if (limitCheck.reason === 'individual') {
+        const minutesUntilReset = Math.ceil((limitCheck.userData.resetTime - Date.now()) / (1000 * 60));
+
+        rateLimitEmbed = {
+          color: 0xffa500,
+          title: '⏱️ Personal Rate Limit Reached',
+          description: `You've used all **${limitCheck.userLimit}** animations this hour on your **${effectiveTier}** tier.`,
+          fields: [
+            {
+              name: '🎯 Current Tier',
+              value: effectiveTier,
+              inline: true
+            },
+            {
+              name: '🔄 Limit Resets In',
+              value: `${minutesUntilReset} minutes`,
+              inline: true
+            },
+            {
+              name: '🚀 Upgrade Options',
+              value: effectiveTier === 'Standard' ?
+                '**Premium**: Unlimited animations for 15 ADA/month\n**Server**: 100 ADA/month for unlimited server-wide access\n\nUse `/subscribe` to upgrade!' :
+                effectiveTier === 'Server' ? 'Server has unlimited access! 🎉' :
+                effectiveTier === 'Admin' ? 'Admin has unlimited access! 👑' :
+                effectiveTier === 'VIP' ? 'VIP channel has unlimited access! ⭐' :
+                'You\'re already on a premium tier! 🎉',
+              inline: false
+            }
+          ]
+        };
+      } else if (limitCheck.reason === 'server_hourly') {
+        const minutesUntilReset = Math.ceil((limitCheck.resetTime - Date.now()) / (1000 * 60));
+
+        rateLimitEmbed = {
+          color: 0xff6b6b,
+          title: '🏢 Server Rate Limit Reached',
+          description: `This server has used all **${limitCheck.limit}** animations this hour.`,
+          fields: [
+            {
+              name: '📊 Server Usage',
+              value: `${limitCheck.serverData.hourlyCount}/${limitCheck.limit} this hour`,
+              inline: true
+            },
+            {
+              name: '🔄 Resets In',
+              value: `${minutesUntilReset} minutes`,
+              inline: true
+            },
+            {
+              name: '💡 Why Server Limits?',
+              value: 'Free servers share a pool of animations to keep the service sustainable for everyone.',
+              inline: false
+            },
+            {
+              name: '🚀 Upgrade Server',
+              value: '**Server Subscription**: 100 ADA/month for unlimited animations for ALL members!\n\nUse `/subscribe Server 1` to upgrade!',
+              inline: false
+            }
+          ]
+        };
+      } else if (limitCheck.reason === 'server_daily') {
+        const hoursUntilReset = Math.ceil((limitCheck.resetTime - Date.now()) / (1000 * 60 * 60));
+
+        rateLimitEmbed = {
+          color: 0xff4757,
+          title: '🏢 Server Daily Limit Reached',
+          description: `This server has used all **${limitCheck.limit}** animations today.`,
+          fields: [
+            {
+              name: '📊 Server Usage',
+              value: `${limitCheck.serverData.dailyCount}/${limitCheck.limit} today`,
+              inline: true
+            },
+            {
+              name: '🔄 Resets In',
+              value: `${hoursUntilReset} hours`,
+              inline: true
+            },
+            {
+              name: '💡 Daily Limits',
+              value: 'Free servers have daily limits to ensure fair usage across all communities.',
+              inline: false
+            },
+            {
+              name: '🚀 Upgrade Server',
+              value: '**Server Subscription**: 100 ADA/month for unlimited animations for ALL members!\n\nUse `/subscribe Server 1` to upgrade!',
+              inline: false
+            }
+          ]
+        };
+      }
+
+      rateLimitEmbed.footer = {
+        text: 'Thanks for using Stickerize Bot! 🎨'
       };
+      rateLimitEmbed.timestamp = new Date().toISOString();
 
       await interaction.followUp({
         embeds: [rateLimitEmbed],
         ephemeral: true
       });
 
-      fs.appendFileSync('bot-log.txt', `User ${userId} hit rate limit (${effectiveTier} tier), shown rate limit message\n`);
+      fs.appendFileSync('bot-log.txt', `Rate limit hit: ${limitCheck.reason} for user ${userId} in server ${guildId}\n`);
       return;
     }
 
     // Increment usage
-    incrementUserUsage(userId, guildId);
+    incrementUserUsage(userId, guildId, channelId);
 
     // Get attachment and options
     const attachment = interaction.options.getAttachment('image');
@@ -983,3 +1184,10 @@ client.login(process.env.DISCORD_TOKEN)
     console.error(message);
     fs.appendFileSync('bot-log.txt', message + '\n');
   });
+
+// Export functions for use in other modules
+module.exports = {
+  checkServerUsage,
+  isServerPremium,
+  SERVER_LIMITS
+};
