@@ -3,10 +3,12 @@
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { SubscriptionManager, PaymentVerifier, TIER_PRICING, calculatePaymentAmount } = require('../payment-system');
+const { ServerManager } = require('../server-management');
 
 // Initialize payment system
 const subscriptionManager = new SubscriptionManager();
 const paymentVerifier = new PaymentVerifier();
+let serverManager = null; // Will be initialized when client is available
 
 // =============================================================================
 // SUBSCRIBE COMMAND
@@ -83,9 +85,9 @@ const subscribeCommand = {
 
     } catch (error) {
       console.error('Subscribe command error:', error);
-      await interaction.reply({ 
-        content: '❌ An error occurred while processing your subscription request.', 
-        ephemeral: true 
+      await interaction.reply({
+        content: '❌ An error occurred while processing your subscription request.',
+        ephemeral: true
       });
     }
   }
@@ -148,29 +150,76 @@ const verifyPaymentCommand = {
         return interaction.editReply({ embeds: [embed] });
       }
 
-      // Create the subscription
-      const subscription = subscriptionManager.createSubscription(
-        userId, 
-        tier, 
-        duration, 
-        verification.amount, 
-        txHash
-      );
+      // Handle different subscription types
+      let subscription;
+      let embed;
 
-      // Success embed
-      const embed = new EmbedBuilder()
-        .setColor('#4ecdc4')
-        .setTitle('🎉 Subscription Activated!')
-        .setDescription(`Your **${tier}** subscription has been successfully activated!`)
-        .addFields(
-          { name: '🎯 Tier', value: tier, inline: true },
-          { name: '⏱️ Duration', value: `${duration} month${duration > 1 ? 's' : ''}`, inline: true },
-          { name: '💰 Amount Paid', value: `${verification.amount} ADA`, inline: true },
-          { name: '📅 Expires', value: `<t:${Math.floor(subscription.endTime / 1000)}:F>`, inline: false },
-          { name: '🔗 Transaction', value: `\`${txHash}\``, inline: false }
-        )
-        .setFooter({ text: 'Thank you for supporting Stickerize Bot!' })
-        .setTimestamp();
+      if (tier === 'Server') {
+        // Server subscription - create server subscription and provide invite link
+        if (!serverManager) {
+          serverManager = new ServerManager(interaction.client);
+        }
+
+        // For server subscriptions, we need to handle the invite process
+        subscription = {
+          userId: userId,
+          tier: tier,
+          duration: duration,
+          amountPaid: verification.amount,
+          txHash: txHash,
+          startTime: Date.now(),
+          endTime: Date.now() + (duration * 30 * 24 * 60 * 60 * 1000)
+        };
+
+        // Generate server invite
+        const inviteInfo = await serverManager.generateServerInvite(userId, tier, duration);
+
+        embed = new EmbedBuilder()
+          .setColor('#4ecdc4')
+          .setTitle('🏢 Server Subscription Activated!')
+          .setDescription('Your server subscription is ready! Follow the steps below to add the bot to your server.')
+          .addFields(
+            { name: '🎯 Subscription Details', value: `**Tier:** ${tier}\n**Duration:** ${duration} month${duration > 1 ? 's' : ''}\n**Amount Paid:** ${verification.amount} ADA`, inline: false },
+            { name: '🔗 Step 1: Invite Bot to Your Server', value: `[Click here to invite the bot](${inviteInfo.inviteUrl})`, inline: false },
+            { name: '⚡ Step 2: Authorize Permissions', value: 'Select your server and authorize the required permissions', inline: false },
+            { name: '🎉 Step 3: Enjoy Unlimited Access', value: 'All server members will have unlimited animations!', inline: false },
+            { name: '📅 Expires', value: `<t:${Math.floor(subscription.endTime / 1000)}:F>`, inline: false },
+            { name: '🔗 Transaction', value: `\`${txHash}\``, inline: false }
+          )
+          .setFooter({ text: 'The bot will automatically detect your server subscription when it joins!' })
+          .setTimestamp();
+
+        // Store the pending server subscription (will be activated when bot joins the server)
+        // We'll store it with a temporary guild ID that gets updated when the bot joins
+        const tempGuildId = `pending_${userId}_${Date.now()}`;
+        serverManager.serverSubscriptions[tempGuildId] = subscription;
+        serverManager.saveServerSubscriptions();
+
+      } else {
+        // Personal subscription (Premium/Ultra)
+        subscription = subscriptionManager.createSubscription(
+          userId,
+          tier,
+          duration,
+          verification.amount,
+          txHash
+        );
+
+        embed = new EmbedBuilder()
+          .setColor('#4ecdc4')
+          .setTitle('🎉 Personal Subscription Activated!')
+          .setDescription(`Your **${tier}** subscription has been successfully activated!`)
+          .addFields(
+            { name: '🎯 Tier', value: tier, inline: true },
+            { name: '⏱️ Duration', value: `${duration} month${duration > 1 ? 's' : ''}`, inline: true },
+            { name: '💰 Amount Paid', value: `${verification.amount} ADA`, inline: true },
+            { name: '📅 Expires', value: `<t:${Math.floor(subscription.endTime / 1000)}:F>`, inline: false },
+            { name: '✨ Features', value: tier === 'Ultra' ? 'Unlimited animations across all servers!' : '50 animations per hour across all servers!', inline: false },
+            { name: '🔗 Transaction', value: `\`${txHash}\``, inline: false }
+          )
+          .setFooter({ text: 'Thank you for supporting Stickerize Bot!' })
+          .setTimestamp();
+      }
 
       await interaction.editReply({ embeds: [embed] });
 
@@ -179,8 +228,8 @@ const verifyPaymentCommand = {
 
     } catch (error) {
       console.error('Verify payment command error:', error);
-      await interaction.editReply({ 
-        content: '❌ An error occurred while verifying your payment.' 
+      await interaction.editReply({
+        content: '❌ An error occurred while verifying your payment.'
       });
     }
   }
@@ -244,9 +293,87 @@ const statusCommand = {
 
     } catch (error) {
       console.error('Status command error:', error);
-      await interaction.reply({ 
-        content: '❌ An error occurred while checking your subscription status.', 
-        ephemeral: true 
+      await interaction.reply({
+        content: '❌ An error occurred while checking your subscription status.',
+        ephemeral: true
+      });
+    }
+  }
+};
+
+// =============================================================================
+// SERVER STATUS COMMAND
+// =============================================================================
+
+const serverStatusCommand = {
+  data: new SlashCommandBuilder()
+    .setName('server-status')
+    .setDescription('Check server subscription status (admin only)'),
+
+  async execute(interaction) {
+    try {
+      // Check if user has admin permissions
+      if (!interaction.member.permissions.has('Administrator')) {
+        return interaction.reply({
+          content: '❌ You need Administrator permissions to check server subscription status.',
+          ephemeral: true
+        });
+      }
+
+      const guildId = interaction.guildId;
+      if (!serverManager) {
+        serverManager = new ServerManager(interaction.client);
+      }
+
+      const serverSubscription = serverManager.getServerSubscription(guildId);
+      const hasActive = serverManager.hasActiveServerSubscription(guildId);
+
+      if (!serverSubscription) {
+        const embed = new EmbedBuilder()
+          .setColor('#ffa726')
+          .setTitle('🏢 No Server Subscription')
+          .setDescription('This server doesn\'t have a subscription.')
+          .addFields(
+            { name: '🆓 Current Status', value: 'Standard (Free)', inline: true },
+            { name: '⚡ Rate Limit', value: '10 animations/hour per user', inline: true },
+            { name: '💎 Upgrade Server', value: 'Use `/subscribe Server 1` to get unlimited access for all members!\n**Cost**: 100 ADA/month', inline: false }
+          )
+          .setFooter({ text: 'Server subscriptions provide unlimited access for ALL members' });
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(hasActive ? '#4ecdc4' : '#ff6b6b')
+        .setTitle('🏢 Server Subscription Status')
+        .setDescription(`Server subscription details:`)
+        .addFields(
+          { name: '🎯 Tier', value: serverSubscription.tier, inline: true },
+          { name: '📊 Status', value: hasActive ? '✅ Active' : '❌ Expired', inline: true },
+          { name: '💰 Amount Paid', value: `${serverSubscription.amountPaid} ADA`, inline: true },
+          { name: '👤 Purchased By', value: `<@${serverSubscription.userId}>`, inline: true },
+          { name: '📅 Started', value: `<t:${Math.floor(serverSubscription.startTime / 1000)}:F>`, inline: true },
+          { name: '📅 Expires', value: `<t:${Math.floor(serverSubscription.endTime / 1000)}:F>`, inline: true },
+          { name: '⏱️ Time Left', value: hasActive ? `<t:${Math.floor(serverSubscription.endTime / 1000)}:R>` : 'Expired', inline: true },
+          { name: '✨ Benefits', value: hasActive ? 'All members have unlimited animations!' : 'Members have individual rate limits', inline: false }
+        );
+
+      if (!hasActive) {
+        embed.addFields(
+          { name: '🔄 Renew Subscription', value: 'Use `/subscribe Server 1` to renew for 100 ADA/month', inline: false }
+        );
+        embed.setFooter({ text: 'Renew to restore unlimited access for all members' });
+      } else {
+        embed.setFooter({ text: 'Thank you for supporting Stickerize Bot!' });
+      }
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+
+    } catch (error) {
+      console.error('Server status command error:', error);
+      await interaction.reply({
+        content: '❌ An error occurred while checking server subscription status.',
+        ephemeral: true
       });
     }
   }
@@ -260,6 +387,7 @@ module.exports = {
   subscribeCommand,
   verifyPaymentCommand,
   statusCommand,
+  serverStatusCommand,
   subscriptionManager,
   paymentVerifier
 };

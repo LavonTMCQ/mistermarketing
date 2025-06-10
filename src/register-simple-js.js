@@ -92,12 +92,17 @@ const subscriptionStatusCommand = new SlashCommandBuilder()
   .setName('subscription')
   .setDescription('Check your subscription status');
 
+const serverStatusCommand = new SlashCommandBuilder()
+  .setName('server-status')
+  .setDescription('Check server subscription status (admin only)');
+
 const commands = [
   stickerizeCommand.toJSON(),
   statsCommand.toJSON(),
   subscribeCommand.toJSON(),
   verifyPaymentCommand.toJSON(),
-  subscriptionStatusCommand.toJSON()
+  subscriptionStatusCommand.toJSON(),
+  serverStatusCommand.toJSON()
 ];
 
 // Construct and prepare an instance of the REST module

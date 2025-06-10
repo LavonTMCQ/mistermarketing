@@ -10,6 +10,7 @@ require('./health-check.js');
 
 // Import payment system
 const { subscriptionManager, paymentVerifier } = require('./commands/payment-commands');
+const { ServerManager } = require('./server-management');
 
 // Tier-based rate limiting
 const userUsage = new Map(); // userId -> { count, resetTime }
@@ -47,26 +48,43 @@ function checkUserUsage(userId) {
   return userData;
 }
 
-// Helper function to get user's rate limit based on tier
-function getUserRateLimit(userId) {
+// Helper function to get user's rate limit based on tier (including server subscriptions)
+function getUserRateLimit(userId, guildId) {
+  // Check server subscription first
+  if (guildId && serverManager && serverManager.hasActiveServerSubscription(guildId)) {
+    return TIER_LIMITS['Server']; // Unlimited for server subscriptions
+  }
+
+  // Check personal subscription
   const userTier = subscriptionManager.getUserTier(userId);
   return TIER_LIMITS[userTier] || TIER_LIMITS['Standard'];
 }
 
 // Helper function to increment user usage
-function incrementUserUsage(userId) {
+function incrementUserUsage(userId, guildId) {
   const userData = checkUserUsage(userId);
-  const userLimit = getUserRateLimit(userId);
-  const userTier = subscriptionManager.getUserTier(userId);
+  const userLimit = getUserRateLimit(userId, guildId);
+  const effectiveTier = getEffectiveUserTier(userId, guildId);
   userData.count++;
-  fs.appendFileSync('bot-log.txt', `User ${userId} (${userTier}) usage: ${userData.count}/${userLimit} (resets in ${Math.ceil((userData.resetTime - Date.now()) / (1000 * 60))} minutes)\n`);
+  fs.appendFileSync('bot-log.txt', `User ${userId} (${effectiveTier}) usage: ${userData.count}/${userLimit} (resets in ${Math.ceil((userData.resetTime - Date.now()) / (1000 * 60))} minutes)\n`);
 }
 
 // Helper function to check if user is over limit
-function isUserOverLimit(userId) {
+function isUserOverLimit(userId, guildId) {
   const userData = checkUserUsage(userId);
-  const userLimit = getUserRateLimit(userId);
+  const userLimit = getUserRateLimit(userId, guildId);
   return userData.count >= userLimit;
+}
+
+// Helper function to get effective user tier (considering server subscriptions)
+function getEffectiveUserTier(userId, guildId) {
+  // Check server subscription first
+  if (guildId && serverManager && serverManager.hasActiveServerSubscription(guildId)) {
+    return 'Server';
+  }
+
+  // Check personal subscription
+  return subscriptionManager.getUserTier(userId);
 }
 
 // Clear log file
@@ -81,11 +99,25 @@ const client = new Client({
   ],
 });
 
+// Initialize server manager
+let serverManager;
+
 // When the client is ready, run this code (only once)
 client.once('ready', (c) => {
   const message = `Ready! Logged in as ${c.user.tag}`;
   console.log(message);
   fs.appendFileSync('bot-log.txt', message + '\n');
+
+  // Initialize server manager
+  serverManager = new ServerManager(client);
+  console.log('✅ Server manager initialized');
+});
+
+// Handle bot joining new servers
+client.on('guildCreate', async (guild) => {
+  if (serverManager) {
+    await serverManager.handleServerJoin(guild);
+  }
 });
 
 // Handle interactions (slash commands)
@@ -109,6 +141,9 @@ client.on('interactionCreate', async interaction => {
   } else if (interaction.commandName === 'subscription') {
     const { statusCommand } = require('./commands/payment-commands');
     await statusCommand.execute(interaction);
+  } else if (interaction.commandName === 'server-status') {
+    const { serverStatusCommand } = require('./commands/payment-commands');
+    await serverStatusCommand.execute(interaction);
   }
 });
 
@@ -121,24 +156,25 @@ async function handleStickerizeCommand(interaction) {
 
     // Check rate limiting
     const userId = interaction.user.id;
+    const guildId = interaction.guildId;
     const userData = checkUserUsage(userId);
-    const userTier = subscriptionManager.getUserTier(userId);
-    const userLimit = getUserRateLimit(userId);
+    const effectiveTier = getEffectiveUserTier(userId, guildId);
+    const userLimit = getUserRateLimit(userId, guildId);
 
-    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Tier: ${userTier}, Usage: ${userData.count}/${userLimit}\n`);
+    fs.appendFileSync('bot-log.txt', `User ${userId} (${interaction.user.username}) - Tier: ${effectiveTier}, Usage: ${userData.count}/${userLimit}, Guild: ${guildId}\n`);
 
     // Check if user has exceeded hourly limit
-    if (isUserOverLimit(userId)) {
+    if (isUserOverLimit(userId, guildId)) {
       const minutesUntilReset = Math.ceil((userData.resetTime - Date.now()) / (1000 * 60));
 
       const rateLimitEmbed = {
         color: 0xffa500,
         title: '⏱️ Rate Limit Reached',
-        description: `You've used all **${userLimit}** animations this hour on your **${userTier}** tier.`,
+        description: `You've used all **${userLimit}** animations this hour on your **${effectiveTier}** tier.`,
         fields: [
           {
             name: '🎯 Current Tier',
-            value: userTier,
+            value: effectiveTier,
             inline: true
           },
           {
@@ -147,10 +183,10 @@ async function handleStickerizeCommand(interaction) {
             inline: true
           },
           {
-            name: '🚀 Upgrade Your Tier',
-            value: userTier === 'Standard' ?
-              '**Premium**: 50 animations/hour for 15 ADA/month\n**Ultra**: Unlimited for 25 ADA/month\n\nUse `/subscribe` to upgrade!' :
-              'You\'re already on a premium tier! 🎉',
+            name: '🚀 Upgrade Options',
+            value: effectiveTier === 'Standard' ?
+              '**Personal**: Premium (50/hr) or Ultra (unlimited)\n**Server**: 100 ADA/month for unlimited server-wide access\n\nUse `/subscribe` to upgrade!' :
+              effectiveTier === 'Server' ? 'Server has unlimited access! 🎉' : 'You\'re already on a premium tier! 🎉',
             inline: false
           }
         ],
@@ -165,12 +201,12 @@ async function handleStickerizeCommand(interaction) {
         ephemeral: true
       });
 
-      fs.appendFileSync('bot-log.txt', `User ${userId} hit rate limit (${userTier} tier), shown rate limit message\n`);
+      fs.appendFileSync('bot-log.txt', `User ${userId} hit rate limit (${effectiveTier} tier), shown rate limit message\n`);
       return;
     }
 
     // Increment usage
-    incrementUserUsage(userId);
+    incrementUserUsage(userId, guildId);
 
     // Get attachment and options
     const attachment = interaction.options.getAttachment('image');
