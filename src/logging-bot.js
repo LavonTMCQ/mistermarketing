@@ -304,8 +304,17 @@ async function handleStickerizeCommand(interaction) {
         fs.appendFileSync('bot-log.txt', `Background removal completed: ${processedImagePath}\n`);
       } catch (bgError) {
         fs.appendFileSync('bot-log.txt', `Background removal failed: ${bgError.message}\n`);
+
+        // Provide more helpful error messages
+        let errorMessage = 'Background removal failed, proceeding with original image.';
+        if (bgError.message.includes('Authentication')) {
+          errorMessage = '⚠️ Background removal temporarily unavailable (API issue). Proceeding with original image.';
+        } else if (bgError.message.includes('timeout')) {
+          errorMessage = '⚠️ Background removal took too long. Proceeding with original image.';
+        }
+
         await interaction.followUp({
-          content: 'Background removal failed, proceeding with original image.',
+          content: errorMessage,
           ephemeral: false
         });
         processedImagePath = imagePath;
@@ -760,7 +769,12 @@ async function handleStatsCommand(interaction) {
 // Function to remove background from an image using AI
 async function removeImageBackgroundWithAI(imagePath, tempDir) {
   try {
-    fs.appendFileSync('bot-log.txt', 'Calling Replicate API for background removal\n');
+    fs.appendFileSync('bot-log.txt', 'Starting background removal with Replicate API\n');
+
+    // Validate API token
+    if (!process.env.REPLICATE_API_TOKEN) {
+      throw new Error('REPLICATE_API_TOKEN not found in environment variables');
+    }
 
     // Read image file and convert to base64 data URI
     const imageBuffer = fs.readFileSync(imagePath);
@@ -770,81 +784,131 @@ async function removeImageBackgroundWithAI(imagePath, tempDir) {
 
     fs.appendFileSync('bot-log.txt', `Image size: ${imageBuffer.length} bytes\n`);
 
-    // Call Replicate API for background removal using 851-labs background-remover model
-    const replicateResponse = await axios.post(
-      'https://api.replicate.com/v1/predictions',
+    // Try multiple background removal models in order of preference
+    const backgroundRemovalModels = [
       {
-        version: "a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc", // 851-labs background-remover
-        input: {
-          image: dataUri
-        }
+        name: 'cjwbw/rembg',
+        version: 'fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003', // ✅ TESTED AND WORKING
+        inputKey: 'image'
       },
       {
-        headers: {
-          'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
+        name: 'legacy-851-labs',
+        version: 'a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc',
+        inputKey: 'image'
       }
-    );
+    ];
 
-    const predictionId = replicateResponse.data.id;
-    fs.appendFileSync('bot-log.txt', `Background removal prediction started: ${predictionId}\n`);
+    let lastError = null;
 
-    // Poll for completion
-    let prediction;
-    let attempts = 0;
-    const maxAttempts = 20; // 3-4 minutes max
+    for (const model of backgroundRemovalModels) {
+      try {
+        fs.appendFileSync('bot-log.txt', `Trying background removal model: ${model.name}\n`);
 
-    while (attempts < maxAttempts) {
-      const pollResponse = await axios.get(
-        `https://api.replicate.com/v1/predictions/${predictionId}`,
-        {
-          headers: {
-            'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
-            'Content-Type': 'application/json'
+        // Call Replicate API for background removal
+        const replicateResponse = await axios.post(
+          'https://api.replicate.com/v1/predictions',
+          {
+            version: model.version,
+            input: {
+              [model.inputKey]: dataUri
+            }
+          },
+          {
+            headers: {
+              'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000 // 30 second timeout
           }
+        );
+
+        const predictionId = replicateResponse.data.id;
+        fs.appendFileSync('bot-log.txt', `Background removal prediction started with ${model.name}: ${predictionId}\n`);
+
+        // Poll for completion with better error handling
+        let prediction;
+        let attempts = 0;
+        const maxAttempts = 30; // 5 minutes max
+
+        while (attempts < maxAttempts) {
+          // Wait before polling (except first attempt)
+          if (attempts > 0) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
+
+          const pollResponse = await axios.get(
+            `https://api.replicate.com/v1/predictions/${predictionId}`,
+            {
+              headers: {
+                'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 15000 // 15 second timeout for polling
+            }
+          );
+
+          prediction = pollResponse.data;
+          fs.appendFileSync('bot-log.txt', `Background removal status (${model.name}): ${prediction.status}\n`);
+
+          if (prediction.status === 'succeeded') {
+            break;
+          } else if (prediction.status === 'failed') {
+            const errorMessage = prediction.error || 'Unknown error';
+            fs.appendFileSync('bot-log.txt', `Background removal failed with ${model.name}: ${errorMessage}\n`);
+            throw new Error(`Background removal failed: ${errorMessage}`);
+          }
+
+          attempts++;
+          fs.appendFileSync('bot-log.txt', `Background removal polling attempt ${attempts} for ${model.name}...\n`);
         }
-      );
 
-      prediction = pollResponse.data;
+        if (!prediction || prediction.status !== 'succeeded') {
+          throw new Error(`Background removal timed out with ${model.name}`);
+        }
 
-      if (prediction.status === 'succeeded') {
-        break;
-      } else if (prediction.status === 'failed') {
-        const errorMessage = prediction.error || 'Unknown error';
-        fs.appendFileSync('bot-log.txt', `Background removal failed: ${errorMessage}\n`);
-        throw new Error(`Background removal failed: ${errorMessage}`);
+        // Download the processed image
+        const processedImageUrl = prediction.output;
+        fs.appendFileSync('bot-log.txt', `Background removed image URL (${model.name}): ${processedImageUrl}\n`);
+
+        const processedResponse = await axios({
+          method: 'GET',
+          url: processedImageUrl,
+          responseType: 'arraybuffer',
+          timeout: 30000 // 30 second timeout for download
+        });
+
+        // Save the processed image
+        const outputPath = path.join(tempDir, `nobg-${path.basename(imagePath)}`);
+        fs.writeFileSync(outputPath, processedResponse.data);
+        fs.appendFileSync('bot-log.txt', `Background removed image saved (${model.name}): ${outputPath}\n`);
+
+        return outputPath;
+
+      } catch (modelError) {
+        lastError = modelError;
+        fs.appendFileSync('bot-log.txt', `Model ${model.name} failed: ${modelError.message}\n`);
+
+        // If this is an auth error, don't try other models
+        if (modelError.response && modelError.response.status === 401) {
+          throw new Error('Authentication failed - check REPLICATE_API_TOKEN');
+        }
+
+        // Continue to next model
+        continue;
       }
-
-      // Wait 10 seconds before polling again
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      attempts++;
-      fs.appendFileSync('bot-log.txt', `Background removal polling attempt ${attempts}...\n`);
     }
 
-    if (!prediction || prediction.status !== 'succeeded') {
-      throw new Error('Background removal timed out or failed');
-    }
-
-    // Download the processed image
-    const processedImageUrl = prediction.output;
-    fs.appendFileSync('bot-log.txt', `Background removed image URL: ${processedImageUrl}\n`);
-
-    const processedResponse = await axios({
-      method: 'GET',
-      url: processedImageUrl,
-      responseType: 'arraybuffer'
-    });
-
-    // Save the processed image
-    const outputPath = path.join(tempDir, `nobg-${path.basename(imagePath)}`);
-    fs.writeFileSync(outputPath, processedResponse.data);
-    fs.appendFileSync('bot-log.txt', `Background removed image saved: ${outputPath}\n`);
-
-    return outputPath;
+    // If we get here, all models failed
+    throw new Error(`All background removal models failed. Last error: ${lastError?.message || 'Unknown error'}`);
 
   } catch (error) {
     fs.appendFileSync('bot-log.txt', `Background removal error: ${error.message}\n`);
+
+    // If it's a critical error, provide helpful message
+    if (error.message.includes('Authentication') || error.message.includes('401')) {
+      throw new Error('Background removal authentication failed. Please check your Replicate API token.');
+    }
+
     throw error;
   }
 }
