@@ -35,13 +35,18 @@ class CardanoVerifier {
       }
 
       // Try to get transaction details from Koios API
-      console.log(`🌐 Calling Koios API: ${CARDANO_APIS.koios}/tx_info?_tx_hashes=${txHash}`);
+      // Koios API expects transaction hashes in array format
+      console.log(`🌐 Calling Koios API: ${CARDANO_APIS.koios}/tx_info`);
 
-      const txResponse = await axios.get(
-        `${CARDANO_APIS.koios}/tx_info?_tx_hashes=${txHash}`,
+      const txResponse = await axios.post(
+        `${CARDANO_APIS.koios}/tx_info`,
+        {
+          _tx_hashes: [txHash]
+        },
         {
           headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
           },
           timeout: 15000 // Increased timeout
         }
@@ -75,16 +80,21 @@ class CardanoVerifier {
 
         for (const output of txData.outputs) {
           outputsChecked++;
-          console.log(`🔍 Output ${outputsChecked}: ${output.address} = ${output.value} lovelace`);
 
-          if (output.address === this.paymentAddress) {
+          // Extract address from the correct field
+          const outputAddress = output.payment_addr?.bech32 || output.address;
+          const outputValue = output.value;
+
+          console.log(`🔍 Output ${outputsChecked}: ${outputAddress} = ${outputValue} lovelace`);
+
+          if (outputAddress === this.paymentAddress) {
             // Convert lovelace to ADA (1 ADA = 1,000,000 lovelace)
-            const adaAmount = parseInt(output.value) / 1000000;
+            const adaAmount = parseInt(outputValue) / 1000000;
             totalSentToWallet += adaAmount;
             foundPayment = true;
             console.log(`💰 ✅ Found payment: ${adaAmount} ADA to your wallet!`);
           } else {
-            console.log(`❌ Output to different address: ${output.address}`);
+            console.log(`❌ Output to different address: ${outputAddress}`);
           }
         }
       } else {
@@ -186,11 +196,15 @@ class CardanoVerifier {
   // Get wallet balance (for monitoring your earnings)
   async getWalletBalance() {
     try {
-      const response = await axios.get(
-        `${CARDANO_APIS.koios}/address_info?_addresses=${this.paymentAddress}`,
+      const response = await axios.post(
+        `${CARDANO_APIS.koios}/address_info`,
+        {
+          _addresses: [this.paymentAddress]
+        },
         {
           headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
           },
           timeout: 10000
         }
@@ -239,11 +253,15 @@ class CardanoVerifier {
   // Get transaction details for user display
   async getTransactionDetails(txHash) {
     try {
-      const response = await axios.get(
-        `${CARDANO_APIS.koios}/tx_info?_tx_hashes=${txHash}`,
+      const response = await axios.post(
+        `${CARDANO_APIS.koios}/tx_info`,
+        {
+          _tx_hashes: [txHash]
+        },
         {
           headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
           },
           timeout: 10000
         }
